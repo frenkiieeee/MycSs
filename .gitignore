@@ -1,0 +1,4 @@
+.build/
+MycSs.app/
+*.xcodeproj
+.DS_Store
