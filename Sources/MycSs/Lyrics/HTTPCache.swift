@@ -1,0 +1,144 @@
+import Foundation
+
+/// A cached HTTP client shared by the lyric providers.
+///
+/// Two behaviours matter here, both learned from running against the live
+/// services:
+///
+/// - **LRCLIB returns `503 ServerOverloaded` intermittently.** Measured on this
+///   machine: three of four back-to-back requests failed with 503 and the fourth
+///   succeeded. It is a transient condition, so requests are retried with a
+///   backoff rather than treated as a failure.
+/// - **The services are slow enough to be noticeable.** A request can take over
+///   a second, so they run off the main thread.
+actor HTTPCache {
+
+    static let shared = HTTPCache()
+
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 40
+        configuration.waitsForConnectivity = false
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
+    private var memoryCache: [String: Data] = [:]
+
+    /// Returns the body for `url`, fetching it if needed.
+    ///
+    /// - Parameter url: the request URL, which is also the cache key.
+    /// - Returns: the response body, or `nil` if every attempt failed.
+    func data(for url: URL, headers: [String: String] = [:]) async -> Data? {
+        if let cached = memoryCache[url.absoluteString] {
+            return cached
+        }
+
+        // Disk cache: a lyric that was already downloaded must never be
+        // requested again. LRCLIB is often overloaded, and re-fetching a known
+        // lyric is pure waste.
+        if let onDisk = DiskCache.read(url.absoluteString) {
+            memoryCache[url.absoluteString] = onDisk
+            return onDisk
+        }
+
+        guard let body = await fetch(url: url, headers: headers) else { return nil }
+        memoryCache[url.absoluteString] = body
+        DiskCache.write(body, for: url.absoluteString)
+        return body
+    }
+
+    /// Performs the request, retrying transient failures with a backoff.
+    private func fetch(url: URL, headers: [String: String]) async -> Data? {
+        var attempt = 0
+        let maxAttempts = 4
+
+        while attempt < maxAttempts {
+            attempt += 1
+
+            do {
+                var request = URLRequest(url: url)
+                for (name, value) in headers {
+                    request.setValue(value, forHTTPHeaderField: name)
+                }
+                if request.value(forHTTPHeaderField: "User-Agent") == nil {
+                    request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+                }
+
+                let (data, response) = try await session.data(for: request)
+
+                if let http = response as? HTTPURLResponse {
+                    switch http.statusCode {
+                    case 200...299:
+                        return data
+                    case 404:
+                        // Not found is a real answer, not a failure.
+                        Log.line("http: 404 for \(url.lastPathComponent)")
+                        return nil
+                    case 429, 500...599:
+                        Log.line("http: \(http.statusCode), retry \(attempt)/\(maxAttempts)")
+                    default:
+                        Log.warn("http: unexpected \(http.statusCode) for \(url.absoluteString)")
+                        return nil
+                    }
+                } else {
+                    return data
+                }
+            } catch {
+                Log.line("http: request failed (\(error.localizedDescription)), retry \(attempt)/\(maxAttempts)")
+            }
+
+            // Backoff: 0.4s, 0.8s, 1.6s.
+            let delay = UInt64(0.4 * pow(2, Double(attempt - 1)) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: delay)
+        }
+
+        Log.warn("http: giving up on \(url.absoluteString)")
+        return nil
+    }
+
+    private static let userAgent = "MycSs/0.1 (macOS lock screen lyrics)"
+}
+
+/// A simple on-disk cache for lyric bodies.
+///
+/// Stored under the app's cache directory, so the system can purge it when
+/// space runs low. Keys are hashed so the file names are safe.
+enum DiskCache {
+
+    private static let directory: URL? = {
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        else { return nil }
+        let base = caches.appendingPathComponent("MycSs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("Lyrics", isDirectory: true)
+    }()
+
+    static func read(_ key: String) -> Data? {
+        guard let file = url(for: key) else { return nil }
+        return try? Data(contentsOf: file)
+    }
+
+    static func write(_ data: Data, for key: String) {
+        guard let file = url(for: key) else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+
+    private static func url(for key: String) -> URL? {
+        guard let directory else { return nil }
+        let name = key.data(using: .utf8)?.base64URLEncodedString() ?? ""
+        return directory.appendingPathComponent(name + ".json")
+    }
+}
+
+extension Data {
+    /// Base64 with the URL-safe alphabet and no padding, so it can be used in a
+    /// file name.
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
