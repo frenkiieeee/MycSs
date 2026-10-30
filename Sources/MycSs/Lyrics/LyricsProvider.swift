@@ -50,44 +50,51 @@ actor LyricsProvider {
         return result
     }
 
-    /// Asks both providers in parallel and keeps the better answer.
+    /// Asks both providers and keeps the answer that comes first.
+    ///
+    /// The two are independent network calls, so they run at the same time.
+    /// What matters is not to wait for both: LRCLIB is often overloaded and
+    /// its retries add seconds, and there is no point in waiting for a second
+    /// answer that is only marginally better.
+    ///
+    /// The one exception: a provider with real word timings is worth a short
+    /// wait, because the karaoke is much more accurate with them.
     private func fetchFresh(for nowPlaying: NowPlaying) async -> Lyrics? {
         Log.line("lyrics: fetching for '\(nowPlaying.title)' by '\(nowPlaying.artist)'")
 
-        // Musixmatch is only consulted when it has been configured with an API
-        // key; without one it is skipped rather than failing.
-        async let lrclibResult = LRCLib.fetch(for: nowPlaying)
-        async let neteaseResult = NetEase.fetch(for: nowPlaying)
-        async let musixmatchResult = Musixmatch.isConfigured
-            ? Musixmatch.fetch(for: nowPlaying)
-            : nil
+        return await withTaskGroup(of: Lyrics?.self) { group -> Lyrics? in
+            group.addTask { await LRCLib.fetch(for: nowPlaying) }
+            group.addTask { await NetEase.fetch(for: nowPlaying) }
 
-        let (fromLRCLib, fromNetEase, fromMusixmatch) = await (lrclibResult, neteaseResult, musixmatchResult)
+            // A task that ends the waiting: if the other provider has not
+            // answered by then, the first answer is good enough.
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                return nil
+            }
 
-        // Real per-word timing is worth more than anything else. Musixmatch's
-        // richsync is character-level, so it is the best of the three.
-        if let musixmatch = fromMusixmatch, musixmatch.wordTimingQuality == .real {
-            Log.line("lyrics: using musixmatch (per-character timing)")
-            return musixmatch
-        }
-        if let netease = fromNetEase, netease.wordTimingQuality == .real {
-            Log.line("lyrics: using netease (real word timings)")
-            return netease
-        }
-        if let musixmatch = fromMusixmatch {
-            Log.line("lyrics: using musixmatch")
-            return musixmatch
-        }
-        if let lrclib = fromLRCLib {
-            Log.line("lyrics: using lrclib")
-            return lrclib
-        }
-        if let netease = fromNetEase {
-            Log.line("lyrics: using netease (interpolated)")
-            return netease
-        }
+            var best: Lyrics?
 
-        Log.line("lyrics: no source produced a usable match")
-        return nil
+            for await result in group {
+                guard let result else {
+                    // The grace period is over.
+                    if best != nil { break }
+                    continue
+                }
+
+                if best == nil {
+                    best = result
+                    // Nothing better is coming if this one is already right.
+                    if result.wordTimingQuality == .real { break }
+                    continue
+                }
+
+                // The second answer: it only wins if it has real word timings.
+                if result.wordTimingQuality == .real { best = result }
+                break
+            }
+
+            return best
+        }
     }
 }

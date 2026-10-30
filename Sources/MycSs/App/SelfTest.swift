@@ -58,14 +58,13 @@ enum SelfTest {
 
         // 4. SkyLight Space lookup.
         print("\n-- SkyLight --")
-        let space = SkyLight.shared.newestLockSpace()
-        print("  newest lock space: \(space.map(String.init) ?? "none")")
+        SkyLight.shared.rememberSpaces()
+        let space = SkyLight.shared.newLockSpace()
+        print("  new lock space: \(space.map(String.init) ?? "none")")
+        print("  spaces: \(SkyLight.shared.describeSpaces())")
 
         // 5. How stale is the reading really?
         LatencyProbe.run()
-
-        // 6. The richsync parser, against Musixmatch's own example.
-        RichSyncTest.run()
 
         // 6. Parser checks against the real formats.
         await SelfTest.testParsers()

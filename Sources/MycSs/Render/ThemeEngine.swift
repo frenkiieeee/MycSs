@@ -81,8 +81,13 @@ final class ThemeEngine {
                 else { return }
                 await MainActor.run {
                     self?.artwork = image
-                    // Only the artwork can change the theme; the artwork of a
-                    // monochrome cover falls back to the default.
+                    // The artwork drives the theme, but the user can turn that
+                    // off: in that case the fixed accent colour is used.
+                    guard AppSettings.shared.useArtworkColours else {
+                        self?.transition(to: Theme.fixed)
+                        return
+                    }
+                    // The artwork of a monochrome cover falls back to the default.
                     if let theme = ArtworkPalette.theme(from: image) {
                         self?.transition(to: theme)
                     } else {

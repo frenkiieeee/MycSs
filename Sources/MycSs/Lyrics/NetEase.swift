@@ -165,7 +165,7 @@ enum NetEase {
             var lines = LyricsParser.parseLRC(lrc)
             lines = LyricsParser.filteringCredits(lines)
             if !lines.isEmpty {
-                lines = WordInterpolator.interpolate(lines)
+                lines = WordInterpolator.interpolate(lines, weighting: AppSettings.shared.wordTiming)
                 Log.line("netease: \(lines.count) lines, no yrc, interpolated word timings")
                 return Lyrics(
                     lines: lines,

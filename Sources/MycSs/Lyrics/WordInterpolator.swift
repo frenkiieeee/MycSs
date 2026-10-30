@@ -13,6 +13,13 @@ import Foundation
 /// the typical pace. The median also gives a natural ceiling for each line, so a
 /// line that ends early (because the singer paused) does not stretch its words
 /// across the whole gap.
+///
+/// **How the pauses are handled**: a line does not always fill the time until
+/// the next line — the singer often pauses, and a long instrumental break
+/// follows. The words are therefore distributed over the *natural* length of the
+/// line (its characters at the song's pace) rather than over the whole slot, so
+/// the highlight finishes when the singing finishes and waits quietly through
+/// the pause instead of crawling across the words.
 enum WordInterpolator {
 
     /// Bounds on the derived pace, in milliseconds per character.
@@ -27,7 +34,7 @@ enum WordInterpolator {
     private static let stretchFactor: Double = 1.35
 
     /// Fills in per-word timings for lines that only have a start time.
-    static func interpolate(_ lines: [LyricLine]) -> [LyricLine] {
+    static func interpolate(_ lines: [LyricLine], weighting: AppSettings.WordTiming = .weighted) -> [LyricLine] {
         guard !lines.isEmpty else { return [] }
 
         let pace = derivePace(from: lines)
@@ -44,21 +51,34 @@ enum WordInterpolator {
             let slot = max(line.endTime - line.startTime, 0.1)
             // How long the words should take at the song's pace.
             let natural = Double(line.text.count) * pace / 1000
-            // The words may stretch past their natural length to fill the slot,
-            // but never past the slot itself: that keeps an instrumental gap
-            // from being filled with stretched words.
-            let allotted = min(slot, natural * stretchFactor)
-            // A floor, so a line of very short words still has a visible duration.
-            let perWord = max(allotted / Double(words.count), 0.05)
+
+            // The words fill the natural length of the line. A pause after the
+            // line is left empty on purpose: the highlight finishes with the
+            // singing rather than dragging through the silence.
+            let allotted: Double
+            switch weighting {
+            case .even:
+                allotted = min(slot, natural * stretchFactor)
+            case .weighted:
+                allotted = min(slot, natural)
+            }
+
+            // Each word gets a share of the line, proportional to its length so
+            // a long word is not rushed and a short one is not stretched.
+            let weights = words.map { Double($0.count) }
+            let totalWeight = max(weights.reduce(0, +), 1)
 
             var result: [LyricWord] = []
             result.reserveCapacity(words.count)
+            var cursor = line.startTime
             for (index, word) in words.enumerated() {
+                let share = allotted * (weights[index] / totalWeight)
                 result.append(LyricWord(
                     text: word,
-                    startTime: line.startTime + Double(index) * perWord,
-                    duration: perWord
+                    startTime: cursor,
+                    duration: max(share, 0.05)
                 ))
+                cursor += share
             }
 
             var updated = line

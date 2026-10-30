@@ -1,15 +1,10 @@
 import AppKit
 import Foundation
-import Observation
 
 /// The user's settings.
 ///
 /// Stored in `UserDefaults` under the app's own domain. Every value has a
 /// sensible default, so a fresh install works without any configuration.
-///
-/// This is a class rather than a struct because it is a singleton whose
-/// properties are mutated from the menu; with a struct, `shared` would be a
-/// `let` and its properties could not be written to.
 ///
 /// It is `@Observable` so that the settings panel and the overlay both react
 /// to a change the moment it is made.
@@ -34,6 +29,8 @@ final class AppSettings {
         static let useArtworkColours = "useArtworkColours"
         static let lyricEffect = "lyricEffect"
         static let crossFadeSeconds = "crossFadeSeconds"
+        static let entranceAnimation = "entranceAnimation"
+        static let wordTiming = "wordTiming"
     }
 
     // MARK: - Energy
@@ -109,7 +106,8 @@ final class AppSettings {
 
     /// Whether the colours come from the album artwork.
     ///
-    /// When off, a fixed accent colour is used instead.
+    /// When off, a fixed accent colour is used instead. This is the switch that
+    /// makes the album's colours actually reach the screen.
     var useArtworkColours: Bool {
         get { defaults.object(forKey: Key.useArtworkColours) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.useArtworkColours) }
@@ -118,11 +116,8 @@ final class AppSettings {
     // MARK: - Lyrics
 
     /// How the active line is highlighted.
-    ///
-    /// The same enum drives the view and the settings, so there is a single
-    /// definition of what each mode means.
     enum LyricEffect: String, CaseIterable {
-        /// The whole line is lit.
+        /// The whole line is lit at once.
         case line
         /// The word being sung fills in progressively.
         case word
@@ -139,15 +134,20 @@ final class AppSettings {
     }
 
     /// The lyrics font.
+    ///
+    /// The default is the system font, which is Apple's own typeface (SF Pro).
+    /// It cannot be named directly — CoreText refuses to hand out the system
+    /// fonts by name — so it is represented by this sentinel and resolved
+    /// through `NSFont.systemFont`.
     var fontName: String {
-        get { defaults.string(forKey: Key.fontName) ?? SystemFonts.defaultName }
+        get { defaults.string(forKey: Key.fontName) ?? SystemFonts.systemFontSentinel }
         set { defaults.set(newValue, forKey: Key.fontName) }
     }
 
     /// The lyrics font size.
     var fontSize: Double {
         get {
-            let value = defaults.object(forKey: Key.fontSize) as? Double ?? 38
+            let value = defaults.object(forKey: Key.fontSize) as? Double ?? 42
             return min(max(value, 18), 88)
         }
         set { defaults.set(newValue, forKey: Key.fontSize) }
@@ -160,6 +160,31 @@ final class AppSettings {
             return LyricEffect(rawValue: raw) ?? .word
         }
         set { defaults.set(newValue.rawValue, forKey: Key.lyricEffect) }
+    }
+
+    /// How the words are timed.
+    enum WordTiming: String, CaseIterable {
+        /// The words are spread evenly inside their line.
+        case even
+        /// The words are spread following the natural length of each word, so a
+        /// long word gets more time than a short one.
+        case weighted
+
+        var title: String {
+            switch self {
+            case .even: return "Proporcional a la longitud"
+            case .weighted: return "Proporcional a la letra"
+            }
+        }
+    }
+
+    /// How the words inside a line are distributed.
+    var wordTiming: WordTiming {
+        get {
+            let raw = defaults.string(forKey: Key.wordTiming) ?? WordTiming.weighted.rawValue
+            return WordTiming(rawValue: raw) ?? .weighted
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.wordTiming) }
     }
 
     /// The font used for the lyrics.
@@ -183,15 +208,15 @@ final class AppSettings {
 
     /// Whether the title and artist are shown.
     var showTrackInfo: Bool {
-        get { defaults.object(forKey: Key.showTrackInfo) as? Bool ?? false }
+        get { defaults.object(forKey: Key.showTrackInfo) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.showTrackInfo) }
     }
 
     /// The side length of the artwork, in points.
     var artworkSize: Double {
         get {
-            let value = defaults.object(forKey: Key.artworkSize) as? Double ?? 340
-            return min(max(value, 120), 520)
+            let value = defaults.object(forKey: Key.artworkSize) as? Double ?? 400
+            return min(max(value, 160), 700)
         }
         set { defaults.set(newValue, forKey: Key.artworkSize) }
     }
@@ -203,5 +228,34 @@ final class AppSettings {
             return min(max(value, 0), 4)
         }
         set { defaults.set(newValue, forKey: Key.crossFadeSeconds) }
+    }
+
+    // MARK: - Entrance
+
+    /// How the overlay appears when the screen is locked.
+    enum Entrance: String, CaseIterable {
+        /// The overlay fades in and grows slightly.
+        case fade
+        /// The overlay falls in from the top.
+        case fall
+        /// The overlay rises from the bottom.
+        case rise
+
+        var title: String {
+            switch self {
+            case .fade: return "Aparecer suave"
+            case .fall: return "Caer desde arriba"
+            case .rise: return "Subir desde abajo"
+            }
+        }
+    }
+
+    /// The entrance animation.
+    var entranceAnimation: Entrance {
+        get {
+            let raw = defaults.string(forKey: Key.entranceAnimation) ?? Entrance.fade.rawValue
+            return Entrance(rawValue: raw) ?? .fade
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.entranceAnimation) }
     }
 }

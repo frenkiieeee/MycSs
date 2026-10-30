@@ -9,9 +9,9 @@ import Foundation
 /// **How the delay is kept low**: the fast reading asks for the position, the
 /// playing state and the track title — about 25 ms. The title is what says
 /// whether the track changed; the expensive metadata (artist, album, length) is
-/// only fetched when the title changes, once per song instead of several times
-/// per second. An earlier version asked for everything on every poll, which cost
-/// 50 ms each time and showed up as a lag in the karaoke.
+/// only fetched when the title changes, which happens once per song instead of
+/// several times per second. An earlier version asked for everything on every
+/// poll, which cost 50 ms each time and showed up as a lag in the karaoke.
 ///
 /// The interpolation is anchored to the last observed position and advanced by
 /// the elapsed wall time, and re-anchored on every poll. If the polls drift
@@ -41,6 +41,8 @@ actor SyncEngine {
     private var loadedTitle: String = ""
     /// Whether a metadata read is already in flight.
     private var isLoadingTrack = false
+    /// Whether the lyrics of the current track are being fetched.
+    private var isLoading = false
 
     private var pollTask: Task<Void, Never>?
 
@@ -51,6 +53,11 @@ actor SyncEngine {
 
     /// The lyrics for the current track, if they have loaded.
     var currentLyrics: Lyrics? { lyrics }
+
+    /// Whether the lyrics are still being fetched.
+    ///
+    /// The overlay uses this to show the artwork on its own while it waits.
+    var isLoadingLyrics: Bool { isLoading }
 
     /// The interpolated playback position, in seconds.
     var position: TimeInterval {
@@ -73,16 +80,25 @@ actor SyncEngine {
 
     /// Starts polling Spotify.
     ///
-    /// Polling only runs while the overlay is on screen. With the Mac unlocked
-    /// the app is idle: no polling, no network, no CPU.
+    /// Polling runs the whole time the app is running, locked or not. That is
+    /// deliberate: while the Mac is unlocked the app knows which track is
+    /// playing, so when the screen is locked the lyrics are already on their way
+    /// and appear immediately instead of a second and a half later.
+    ///
+    /// Nothing is drawn while unlocked, and the app only makes network requests
+    /// when the track actually changes.
     func start() {
         guard pollTask == nil else { return }
         Log.line("sync: polling started")
+
+        // Read the track straight away.
+        Task { await poll() }
+
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.poll()
                 let interval = self?.pollInterval ?? 0.2
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                await self?.poll()
             }
         }
     }
@@ -112,11 +128,24 @@ actor SyncEngine {
         }
 
         // A different title means a different track: fetch the rest of the
-        // metadata. This is the reliable signal, and it happens once per song.
+        // metadata and the lyrics. This is the reliable signal, and it happens
+        // once per song.
+        //
+        // This check comes first on purpose: it is also what handles the very
+        // first reading of a session, where the title is new. Returning early
+        // there would leave the app without lyrics until the next song.
         if !snapshot.title.isEmpty, snapshot.title != loadedTitle {
             loadedTitle = snapshot.title
             await refreshTrackMetadata()
             // The position belongs to the new track, so the anchor is reset.
+            anchorPosition = observed
+            anchorDate = now
+            return
+        }
+
+        // The very first reading has no anchor to compare against: the position
+        // is simply taken as it is, without reporting a phantom seek.
+        if loadedTitle.isEmpty, nowPlaying.title.isEmpty {
             anchorPosition = observed
             anchorDate = now
             return
@@ -171,12 +200,14 @@ actor SyncEngine {
 
         Log.line("sync: track changed to '\(track.title)' by '\(track.artist)'")
         lyrics = nil
+        isLoading = true
         await loadLyrics(for: track)
     }
 
     // MARK: - Lyrics
 
     private func loadLyrics(for nowPlaying: NowPlaying) async {
+        defer { isLoading = false }
         guard let fetched = await LyricsProvider.shared.lyrics(for: nowPlaying) else {
             Log.line("sync: no lyrics for '\(nowPlaying.title)'")
             return

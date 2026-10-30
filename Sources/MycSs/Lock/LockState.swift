@@ -47,9 +47,20 @@ final class LockState {
 
     /// Seeds the state from the window server and starts observing transitions.
     func start() {
+        guard !isDemo else {
+            Log.line("lock: demo mode, the lock state is ignored")
+            return
+        }
         setLocked(Self.queryLockedState(), source: "seed")
         Log.line("lock: initial state isLocked=\(isLocked)")
     }
+
+    /// Whether the demo mode is running.
+    ///
+    /// The demo shows the overlay as an ordinary window, so it must not follow
+    /// the lock screen into its Space: the picture would come out empty and
+    /// the window would be dragged off the screen.
+    private let isDemo = CommandLine.arguments.contains("--demo")
 
     /// Reads the current state, cached for a short window.
     ///
@@ -57,6 +68,7 @@ final class LockState {
     /// re-read when the cache is older than a second. Notifications refresh the
     /// cache immediately, so in practice this is only hit on the very first read.
     func lockedNow() -> Bool {
+        guard !isDemo else { return false }
         if Date().timeIntervalSince(lastStateChange) < 1.0 {
             return cachedLocked
         }
@@ -81,7 +93,27 @@ final class LockState {
         guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
             return false
         }
+        // Two keys say different things about the lock state, and they do not
+        // always agree:
+        //
+        // - `kCGSSessionOnConsoleKey` is 1 while the session owns the console.
+        // - `CGSSessionScreenIsLocked` says directly whether the screen is
+        //   locked.
+        //
+        // The second is the explicit one, so it is preferred; the first is the
+        // fallback. Both are logged when they disagree, because a disagreement is
+        // what makes the overlay appear late or not at all.
         let onConsole = (session["kCGSSessionOnConsoleKey"] as? Bool) ?? true
+        let screenLocked = session["CGSSessionScreenIsLocked"] as? Bool
+
+        if let screenLocked, screenLocked != !onConsole {
+            Log.line("""
+            lock: the two lock signals disagree (onConsole: \(onConsole), \
+            screenIsLocked: \(screenLocked))
+            """)
+        }
+
+        if let screenLocked { return screenLocked }
         return !onConsole
     }
 }

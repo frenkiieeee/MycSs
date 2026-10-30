@@ -18,10 +18,20 @@ final class MouseWatcher {
     /// Called when the pointer moves, with the new position.
     var onMove: ((CGPoint) -> Void)?
 
+    /// Called when a button is pressed, with the position of the pointer.
+    ///
+    /// The overlay never receives the clicks itself: it is click-through, so
+    /// that the password field of the lock screen underneath can be used. The
+    /// clicks are noticed here instead, which is what the eye button of the
+    /// password hint needs.
+    var onClick: ((CGPoint) -> Void)?
+
     /// How far the pointer has to travel to count as a movement.
     private let threshold: CGFloat = 12
 
     private var lastPosition: CGPoint = .zero
+    /// Whether a button was down the last time.
+    private var buttonWasDown = false
     private var timer: Timer?
 
     func start() {
@@ -45,8 +55,17 @@ final class MouseWatcher {
         let position = NSEvent.mouseLocation
         let dx = position.x - lastPosition.x
         let dy = position.y - lastPosition.y
-        guard dx * dx + dy * dy > threshold * threshold else { return }
-        lastPosition = position
-        onMove?(position)
+        let moved = dx * dx + dy * dy > threshold * threshold
+        if moved {
+            lastPosition = position
+            onMove?(position)
+        }
+
+        // A click is a button that was up and is now down.
+        let buttonIsDown = NSEvent.pressedMouseButtons != 0
+        if buttonIsDown, !buttonWasDown {
+            onClick?(position)
+        }
+        buttonWasDown = buttonIsDown
     }
 }

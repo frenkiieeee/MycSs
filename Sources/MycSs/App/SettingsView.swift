@@ -96,7 +96,7 @@ struct LyricsSettingsTab: View {
 
                 HStack {
                     Text("Tamaño")
-                    Slider(value: $settings.fontSize, in: 18...88)
+                    Slider(value: $settings.fontSize, in: 18...96)
                     Text("\(Int(settings.fontSize))")
                         .monospacedDigit()
                         .frame(width: 34, alignment: .trailing)
@@ -115,6 +115,32 @@ struct LyricsSettingsTab: View {
                         Text(effect.title).tag(effect)
                     }
                 }
+
+                Text("""
+                «Línea completa» marca la línea que se está cantando completa, \
+                sin seguir palabra por palabra. «Palabra a palabra» ilumina la \
+                palabra exacta. «Palabra destacada» además agranda la palabra que \
+                se está cantando.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Timing de las palabras") {
+                Picker("Distribución", selection: $settings.wordTiming) {
+                    ForEach(AppSettings.WordTiming.allCases, id: \.self) { timing in
+                        Text(timing.title).tag(timing)
+                    }
+                }
+
+                Text("""
+                «Proporcional a la letra» reparte el tiempo según el tamaño de \
+                cada palabra, y las pausas quedan vacías: la letra termina de \
+                iluminarse cuando termina de cantarse, en vez de avanzar lento \
+                durante el silencio.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -138,6 +164,13 @@ struct AppearanceSettingsTab: View {
 
                 Toggle("Usar los colores del álbum", isOn: $settings.useArtworkColours)
 
+                Text("""
+                Con esta opción apagada se usa un color fijo en lugar del que \
+                viene de la portada.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
                 HStack {
                     Text("Velocidad")
                     Slider(value: $settings.animationIntensity, in: 0...2)
@@ -155,6 +188,21 @@ struct AppearanceSettingsTab: View {
                 }
             }
 
+            Section("Aparición") {
+                Picker("Entrada", selection: $settings.entranceAnimation) {
+                    ForEach(AppSettings.Entrance.allCases, id: \.self) { entrance in
+                        Text(entrance.title).tag(entrance)
+                    }
+                }
+
+                Text("""
+                Define cómo aparece la app sobre la pantalla de bloqueo, para \
+                que no salte de golpe.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Contenido") {
                 Toggle("Mostrar el reloj", isOn: $settings.showClock)
                 Toggle("Mostrar la portada del álbum", isOn: $settings.showArtwork)
@@ -162,7 +210,7 @@ struct AppearanceSettingsTab: View {
 
                 HStack {
                     Text("Tamaño de la portada")
-                    Slider(value: $settings.artworkSize, in: 160...620)
+                    Slider(value: $settings.artworkSize, in: 160...700)
                     Text("\(Int(settings.artworkSize))")
                         .monospacedDigit()
                         .frame(width: 40, alignment: .trailing)
@@ -178,43 +226,11 @@ struct AppearanceSettingsTab: View {
 
 struct BehaviourSettingsTab: View {
     @Bindable var settings = AppSettings.shared
-    /// The API key is held here so the field can be edited; it is written to
-    /// the keychain when it changes.
-    @Bindable var key = MusixmatchKeyField.shared
 
     var body: some View {
         Form {
             Section("Overlay") {
                 Toggle("Mostrar letras en la pantalla de bloqueo", isOn: $settings.overlayEnabled)
-            }
-
-            Section("Fuentes de letras") {
-                LabeledContent("LRCLIB y NetEase") {
-                    Text("Siempre disponibles")
-                        .foregroundStyle(.secondary)
-                }
-                LabeledContent("Musixmatch") {
-                    if Musixmatch.isConfigured {
-                        Text("Configurado")
-                            .foregroundStyle(.green)
-                    } else {
-                        Text("Sin clave de API")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                SecureField("Clave de API de Musixmatch", text: $key.value)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("""
-                La clave se guarda en el llavero del sistema. Se consigue gratis \
-                en musixmatch.com/developer y es opcional: sin ella la app \
-                sigue funcionando con las otras dos fuentes. Musixmatch es la \
-                fuente con el timing más fino (por carácter), así que es la que \
-                mejor sigue la voz.
-                """)
-                .font(.callout)
-                .foregroundStyle(.secondary)
             }
 
             Section("Pantalla") {
@@ -255,25 +271,4 @@ struct BehaviourSettingsTab: View {
 final class FontFilter {
     static let shared = FontFilter()
     var text: String = ""
-}
-
-/// The Musixmatch API key as it is being typed.
-///
-/// It lives in an observable object because `@State` is not available in this
-/// build (the SwiftUI macros plugin ships with Xcode, not with the Command Line
-/// Tools). The key itself is written to the keychain, not to this object.
-@Observable
-final class MusixmatchKeyField {
-    static let shared = MusixmatchKeyField()
-
-    /// The key as it is being edited.
-    var value: String {
-        didSet {
-            Musixmatch.setAPIKey(value)
-        }
-    }
-
-    private init() {
-        value = Musixmatch.apiKey ?? ""
-    }
 }

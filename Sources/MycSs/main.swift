@@ -14,6 +14,11 @@ application.delegate = delegate
 // An agent app: no Dock icon, just the menu bar item.
 application.setActivationPolicy(.accessory)
 
+if CommandLine.arguments.contains("--inspect-spaces") {
+    SpaceInspector.run()
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--selftest") {
     // The self test talks to the network and to Spotify, so it runs the main
     // run loop until it finishes.

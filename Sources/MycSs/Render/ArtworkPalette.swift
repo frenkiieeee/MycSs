@@ -87,6 +87,17 @@ struct Theme: Equatable {
         backgroundDeep: ThemeColor(red: 0.02, green: 0.02, blue: 0.04),
         backgroundMid: ThemeColor(red: 0.08, green: 0.09, blue: 0.13)
     )
+
+    /// The fixed theme, used when the user turns the artwork colours off.
+    ///
+    /// It is a soft blue rather than white, because white halos on a black
+    /// background read as glare rather than as colour.
+    static let `fixed` = Theme(
+        accent: ThemeColor(red: 0.45, green: 0.68, blue: 1.0),
+        secondary: ThemeColor(red: 0.62, green: 0.78, blue: 1.0),
+        backgroundDeep: ThemeColor(red: 0.02, green: 0.03, blue: 0.06),
+        backgroundMid: ThemeColor(red: 0.07, green: 0.10, blue: 0.16)
+    )
 }
 
 /// Extracts a colour theme from album artwork.
@@ -95,7 +106,7 @@ struct Theme: Equatable {
 /// against real covers:
 ///
 /// 1. Downsample to 64x64.
-/// 2. Discard pixels that are nearly white (max < 70) or nearly colourless
+/// 2. Discard pixels that are nearly white (max < 0.27) or nearly colourless
 ///    (saturation < 0.18). This is what the "most saturated pixel" approach
 ///    gets wrong: on a grey cover it picks white, which is invisible as a glow
 ///    and useless as text.
@@ -113,11 +124,15 @@ enum ArtworkPalette {
         guard let pixels = downsample(image, side: 64) else { return nil }
 
         // Step 2: keep only pixels that carry colour.
+        //
+        // The channels are normalised to 0...1, so the brightness threshold is
+        // 0.27 (which is 70/255). It used to be written as `70`, which no pixel
+        // could ever reach — that is why every cover looked colourless.
         let colourful = pixels.filter { pixel in
             let maximum = max(pixel.red, pixel.green, pixel.blue)
             let minimum = min(pixel.red, pixel.green, pixel.blue)
             let saturation = maximum <= 0 ? 0 : (maximum - minimum) / maximum
-            return maximum > 70 && saturation > 0.18
+            return maximum > 0.27 && saturation > 0.18
         }
 
         // Step 3: no colour means no theme.
@@ -167,36 +182,39 @@ enum ArtworkPalette {
     }
 
     /// Downsamples the image to a small square and reads its pixels.
+    ///
+    /// The drawing goes through a plain `CGContext` rather than through
+    /// `NSBitmapImageRep` and `NSGraphicsContext`: the latter silently produces
+    /// an all-black bitmap for a JPEG loaded from disk, which made every cover
+    /// look like it had no colour at all.
     private static func downsample(_ image: NSImage, side: Int) -> [Pixel]? {
-        guard let representation = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: side,
-            pixelsHigh: side,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            Log.line("palette: the artwork could not be read")
+            return nil
+        }
+
+        var buffer = [UInt8](repeating: 0, count: side * side * 4)
+        guard let context = CGContext(
+            data: &buffer,
+            width: side,
+            height: side,
+            bitsPerComponent: 8,
             bytesPerRow: side * 4,
-            bitsPerPixel: 32
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: representation)
-        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
-        NSGraphicsContext.restoreGraphicsState()
+        context.interpolationQuality = .low
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
 
         var pixels: [Pixel] = []
         pixels.reserveCapacity(side * side)
-        for y in 0..<side {
-            for x in 0..<side {
-                guard let colour = representation.colorAt(x: x, y: y) else { continue }
-                pixels.append(Pixel(
-                    red: Double(colour.redComponent),
-                    green: Double(colour.greenComponent),
-                    blue: Double(colour.blueComponent)
-                ))
-            }
+        for index in stride(from: 0, to: buffer.count, by: 4) {
+            pixels.append(Pixel(
+                red: Double(buffer[index]) / 255,
+                green: Double(buffer[index + 1]) / 255,
+                blue: Double(buffer[index + 2]) / 255
+            ))
         }
         return pixels
     }

@@ -27,6 +27,13 @@ enum Log {
         return formatter
     }()
 
+    /// The open handle of the log file.
+    ///
+    /// The file is opened once and kept open: opening, writing and closing it
+    /// for every line costs three system calls, and the app logs often enough
+    /// (every lock, every track change) for that to show up.
+    private static var handle: FileHandle?
+
     static func line(_ message: String) {
         // Local time with sub-second precision: the log is read by a human
         // comparing it against what they just did on screen.
@@ -34,15 +41,21 @@ enum Log {
         let text = "\(stamp) \(message)\n"
         queue.async {
             let destination = overridePath.map { URL(fileURLWithPath: $0) } ?? url
-            if let data = text.data(using: .utf8) {
-                if let handle = try? FileHandle(forWritingTo: destination) {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                    try? handle.close()
-                } else {
-                    try? text.write(to: destination, atomically: true, encoding: .utf8)
+            guard let data = text.data(using: .utf8) else { return }
+
+            if handle == nil {
+                if !FileManager.default.fileExists(atPath: destination.path) {
+                    FileManager.default.createFile(atPath: destination.path, contents: nil)
                 }
+                handle = try? FileHandle(forWritingTo: destination)
             }
+
+            guard let handle else {
+                try? text.write(to: destination, atomically: true, encoding: .utf8)
+                return
+            }
+            handle.seekToEndOfFile()
+            handle.write(data)
         }
     }
 

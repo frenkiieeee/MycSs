@@ -14,39 +14,49 @@ final class LockOverlayController {
     private let lockState: LockState
     private let model = LyricsViewModel()
 
-    /// Baseline Space id captured at launch.
-    ///
-    /// The lock screen gets a brand new Space on every lock. If the overlay were
-    /// shown immediately on the lock notification, it could land in the *previous*
-    /// lock's Space and render underneath the incoming lock screen. Waiting for a
-    /// Space newer than this baseline avoids that race.
-    private var baselineSpaceID: UInt64 = 0
-    private var waitingForFreshSpace = false
+    /// True while the overlay is waiting for the lock screen's Space.
+    private var waitingForLockScreen = false
 
-    /// When the lock happened, used to decide when to stop waiting for a fresh
-    /// Space and fall back to showing the overlay anyway.
+    /// When the lock happened, used to give up waiting and show anyway.
     private var lockedAt: Date?
 
-    /// How long to wait for the lock screen's own Space before showing the overlay
+    /// How long to wait for the lock screen's Space before showing the overlay
     /// regardless.
     ///
-    /// The fresh-Space signal is the most correct trigger, but it is an
-    /// implementation detail of the window server. If a macOS version stops
-    /// creating a new Space per lock, waiting forever would mean the overlay
-    /// never appears. Two seconds is long enough for the lock screen to come up
-    /// and short enough that the user does not notice the difference.
-    private let freshSpaceTimeout: TimeInterval = 2.0
+    /// The Space lookup is the correct trigger, but it is an implementation
+    /// detail of the window server. If something changes and the Space cannot be
+    /// found, the overlay must still appear — a late overlay is much better than
+    /// no overlay at all.
+    private let lockScreenTimeout: TimeInterval = 1.2
 
     init(lockState: LockState) {
         self.lockState = lockState
     }
 
+    /// Starts the continuous Spotify polling.
+    func startListening() {
+        model.startListening()
+    }
+
     func start() {
-        // Capture the newest lock Space that already exists (if any). The next lock
-        // will create a newer one, and that is the signal that the real lock
-        // screen is up.
-        baselineSpaceID = SkyLight.shared.newestLockSpace() ?? 0
-        Log.line("overlay: baseline lock space id = \(baselineSpaceID)")
+        // The private API is opened up front, so the first lock does not have
+        // to wait for it, and the spaces of the session are written down, so
+        // that the Space the lock creates can be told apart from the
+        // leftovers of the previous one.
+        SkyLight.shared.prepare()
+        SkyLight.shared.rememberSpaces()
+
+        // The window is made now, and hidden, instead of being made at the
+        // moment of the lock.
+        //
+        // A window that is created while the screen is locking is not drawn
+        // in the Space it is moved to: it stays invisible until the screen is
+        // locked a second time, when the window already exists and the
+        // compositor draws it without trouble.
+        rebuild()
+        for panel in panels.values {
+            panel.orderOut(nil)
+        }
 
         lockState.onChange = { [weak self] locked in
             guard let self else { return }
@@ -64,68 +74,116 @@ final class LockOverlayController {
 
     private func handleLockChange(_ locked: Bool) {
         if locked {
-            // Do not show the overlay yet: the incoming lock screen's Space has
-            // to be created first.
-            waitingForFreshSpace = true
+            // Show the overlay immediately rather than waiting for the next
+            // tick: the lock notification is the earliest signal there is, and
+            // every millisecond of delay is visible on screen.
+            //
+            // The window is placed in the best known lock Space right away, and
+            // `followLockScreen` moves it again as soon as the lock screen
+            // creates its own Space.
+            waitingForLockScreen = false
             lockedAt = Date()
-            Log.line("overlay: waiting for fresh lock space")
+            lockedAtTimestamp = Date().timeIntervalSince1970
+            Log.line("overlay: locked, showing overlay")
+            Log.line("skylight: spaces at lock \(SkyLight.shared.describeSpaces())")
+            show()
+
+            // A moment later, when the lock screen is already up, the state of
+            // the window says whether it is really on screen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let panel = self?.panels.values.first else { return }
+                Log.line("skylight: window state \(SkyLight.shared.describe(panel))")
+            }
         } else {
-            waitingForFreshSpace = false
+            waitingForLockScreen = false
             lockedAt = nil
             hide()
+            // The windows of the lock screen are written down again, so that
+            // the next lock can tell which one is the field of the password.
+                // The spaces of the unlocked session, so that the Space the lock
+            // creates can be told apart from the leftovers of the last one.
+            SkyLight.shared.rememberSpaces()
         }
     }
 
-    /// Called from the run loop while locked, to show the overlay once the lock
-    /// screen's Space exists.
+    /// When the lock was detected, for measuring how long the overlay takes to
+    /// appear.
+    private var lockedAtTimestamp: TimeInterval = 0
+
+    /// Measures how long the overlay takes to reach the lock screen's Space.
+    ///
+    /// The first move happens immediately when the lock is detected, and the
+    /// second one when the lock screen creates its Space. The difference is the
+    /// delay the user actually sees.
+    private func measureAppearance() {
+        guard lockedAtTimestamp > 0 else { return }
+        let elapsed = Date().timeIntervalSince1970 - lockedAtTimestamp
+        lockedAtTimestamp = 0
+        Log.line(String(format: "overlay: reached the lock screen space in %.0f ms", elapsed * 1000))
+    }
+
+    /// Keeps the overlay in step with the lock screen.
+    ///
+    /// The lock screen creates its Space a fraction of a second after the lock
+    /// notification, so the overlay is placed in the best known Space first and
+    /// moved again as soon as the real one appears.
     func tick() {
-        guard waitingForFreshSpace else { return }
+        followLockScreen()
+    }
 
-        // The user can turn the overlay off entirely.
-        guard AppSettings.shared.overlayEnabled else {
-            waitingForFreshSpace = false
-            lockedAt = nil
-            Log.line("overlay: disabled in settings, not showing")
-            return
+    /// Moves the overlay again if the lock screen has created a newer Space.
+    ///
+    /// The lock screen's Space is created a fraction of a second after the lock
+    /// notification, so the overlay is placed in the newest known lock Space and
+    /// then moved again as soon as the real one appears.
+    func followLockScreen() {
+        guard !isPreview else { return }
+
+        var moved = false
+        for panel in panels.values {
+            if SkyLight.shared.followLockScreenSpace(of: panel) { moved = true }
         }
+        if moved { measureAppearance() }
 
-        let current = SkyLight.shared.newestLockSpace() ?? 0
-        if current != 0, current > baselineSpaceID {
-            // The lock screen created its own Space: this is the reliable signal.
-            waitingForFreshSpace = false
-            lockedAt = nil
-            baselineSpaceID = current
-            Log.line("overlay: fresh lock space \(current) detected, showing overlay")
-            show()
-            return
-        }
-
-        // Fallback: the window server did not create a new Space. Waiting forever
-        // would mean the overlay never appears, so show it anyway after a short
-        // grace period and let SkyLightOperator's own Space handle the level.
-        if let lockedAt, Date().timeIntervalSince(lockedAt) > freshSpaceTimeout {
-            waitingForFreshSpace = false
-            self.lockedAt = nil
-            Log.line("overlay: no fresh space after \(freshSpaceTimeout)s, showing anyway")
-            show()
+        // The spaces are written to the log when they change: they are what
+        // tells the lock screen's space apart from the others, and the first
+        // lock after the app starts is the one that does not work.
+        ticks += 1
+        if ticks % 12 == 0 {
+            let spaces = SkyLight.shared.describeSpaces()
+            if spaces != lastSpaces {
+                lastSpaces = spaces
+                Log.line("skylight: spaces \(spaces)")
+            }
         }
     }
+
+    /// The number of ticks since the last log line.
+    private var ticks = 0
+    /// The spaces as they were the last time they were written to the log.
+    private var lastSpaces = ""
 
     /// Shows the overlay without the screen being locked.
     ///
     /// This is a development aid, not a user-facing feature: it lets the layout
-    /// be iterated on without locking the Mac every time. The window is elevated
-    /// to the newest lock Space so the rendering path is the same one the real
-    /// overlay takes.
+    /// be iterated on without locking the Mac every time.
     func showPreview() {
         Log.line("overlay: preview requested")
-        show()
+        showPreviewWindow()
     }
 
     func hidePreview() {
         Log.line("overlay: preview hidden")
         hide()
     }
+
+    /// Forces the password hint to be visible, for checking the reveal without
+    /// moving the mouse.
+    func forceHint() {
+        model.forceHint()
+        Log.line("overlay: hint forced for the snapshot")
+    }
+
     // MARK: - Panels
 
     private func rebuild() {
@@ -146,21 +204,34 @@ final class LockOverlayController {
     }
 
     private func makePanel() -> LockOverlayPanel {
+        let frame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let panel = LockOverlayPanel(
-            contentRect: NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900),
+            contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         let host = NSHostingView(rootView: OverlayRootView(model: model))
+        // The hosting view is created with a zero frame. Without an explicit one
+        // it stays zero-sized and the panel renders nothing at all — the window is
+        // on screen but its content is invisible.
+        host.frame = frame
         host.autoresizingMask = [.width, .height]
         panel.contentView = host
+        panel.setFrame(frame, display: true)
         return panel
     }
 
+    /// Whether the panels behave as a lock screen overlay (joining every Space)
+    /// or as an ordinary window (the preview).
+    private var isPreview = false
+
     private func show() {
+        isPreview = false
         rebuild()
+        let shown = Date()
         for panel in panels.values {
+            panel.joinsAllSpaces = true
             // `orderFrontRegardless` so the panel is shown even though this app is
             // not the active application (it never becomes active).
             panel.orderFrontRegardless()
@@ -168,12 +239,35 @@ final class LockOverlayController {
             // elevation has to happen after ordering it front.
             SkyLight.shared.elevate(panel)
         }
-        Log.line("overlay: shown on \(panels.count) display(s)")
-        // Polling Spotify only runs while the overlay is up. With the Mac
-        // unlocked the app does nothing at all.
+        // How long the overlay itself took to appear, before it was even moved
+        // into the lock screen's Space.
+        Log.line(String(
+            format: "overlay: shown on %d display(s) in %.0f ms",
+            panels.count, shown.timeIntervalSince(lockedAt ?? shown) * 1000
+        ))
         model.start()
+        model.setVisible(true)
         // Keep the display awake so the lyrics stay visible.
         DisplayPower.apply(AppSettings.shared.powerMode)
+    }
+
+    /// Shows the overlay as an ordinary window, without touching the Spaces.
+    ///
+    /// This is what the preview uses. It deliberately does **not** go through
+    /// `SkyLightOperator`: moving the window into the lock screen's Space takes it
+    /// off the current Space, which makes the preview invisible and drags the Dock
+    /// along with it. The preview is for looking at the layout on the desktop, so
+    /// it stays a plain window.
+    private func showPreviewWindow() {
+        isPreview = true
+        rebuild()
+        for panel in panels.values {
+            panel.joinsAllSpaces = false
+            panel.orderFrontRegardless()
+        }
+        Log.line("overlay: preview shown on \(panels.count) display(s)")
+        model.start()
+        model.setVisible(true)
     }
 
     private func hide() {
@@ -181,37 +275,29 @@ final class LockOverlayController {
             panel.orderOut(nil)
         }
         model.stop()
+        model.setVisible(false)
         DisplayPower.release()
         Log.line("overlay: hidden")
-    }
-
-    /// Forces the password hint to be visible, for checking the reveal without
-    /// moving the mouse.
-    func forceHint() {
-        model.forceHint()
-        Log.line("overlay: hint forced for the snapshot")
     }
 
     // MARK: - Debug snapshot
 
     /// Renders the overlay to a PNG.
     ///
-    /// The window lives in the lock screen's Space, so it cannot be captured
-    /// from the display server. Rendering the view hierarchy directly produces
-    /// the same pixels without needing Screen Recording permission.
+    /// The window that is on screen is the real thing, so it is captured first.
+    /// But that window lives in the lock screen's Space, and the window server
+    /// does not draw a window that belongs to another Space, so the capture
+    /// comes out empty while the screen is locked. In that case the picture is
+    /// rendered from the view itself instead, which produces the same pixels
+    /// without needing Screen Recording permission.
     func snapshot(to path: String) {
-        guard let panel = panels.values.first,
-              let view = panel.contentView,
-              let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds)
-        else {
-            Log.error("snapshot: no window or view")
+        let data = captureWindow() ?? captureView()
+
+        guard let data else {
+            Log.error("snapshot: the image could not be rendered")
             return
         }
-        view.cacheDisplay(in: view.bounds, to: representation)
-        guard let data = representation.representation(using: .png, properties: [:]) else {
-            Log.error("snapshot: PNG encode failed")
-            return
-        }
+
         do {
             try data.write(to: URL(fileURLWithPath: path))
             Log.line("snapshot: written to \(path)")
@@ -219,9 +305,79 @@ final class LockOverlayController {
             Log.error("snapshot: \(error.localizedDescription)")
         }
     }
+
+    /// Captures the window that is on screen.
+    ///
+    /// Returns nil when the window is not being drawn, which is what happens
+    /// when it belongs to another Space.
+    private func captureWindow() -> Data? {
+        guard let panel = panels.values.first,
+              let view = panel.contentView,
+              let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { return nil }
+
+        view.cacheDisplay(in: view.bounds, to: representation)
+        guard !isBlank(representation) else {
+            Log.line("snapshot: the window is in another space, rendering the view instead")
+            return nil
+        }
+        return representation.representation(using: .png, properties: [:])
+    }
+
+    /// Renders the view on its own.
+    private func captureView() -> Data? {
+        let size = panels.values.first?.frame.size
+            ?? NSScreen.main?.frame.size
+            ?? CGSize(width: 1440, height: 900)
+
+        let renderer = ImageRenderer(content: OverlayRootView(model: model))
+        renderer.proposedSize = ProposedViewSize(size)
+        renderer.scale = 2
+
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff)
+        else { return nil }
+
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    /// Whether a bitmap is completely empty.
+    ///
+    /// A window that is not drawn produces a bitmap where every pixel is
+    /// transparent.
+    private func isBlank(_ representation: NSBitmapImageRep) -> Bool {
+        guard let image = representation.cgImage else { return true }
+
+        let width = 64
+        let height = 64
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return true }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixels.allSatisfy { $0 == 0 }
+    }
+
+
+    private func findScrollView(in view: NSView) -> NSScrollView? {
+        if let scroll = view as? NSScrollView { return scroll }
+        for subview in view.subviews {
+            if let found = findScrollView(in: subview) { return found }
+        }
+        return nil
+    }
 }
 
 extension NSScreen {
+    /// The CoreGraphics id of the display.
     var displayID: CGDirectDisplayID? {
         deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }

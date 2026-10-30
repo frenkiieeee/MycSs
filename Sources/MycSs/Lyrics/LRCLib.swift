@@ -17,29 +17,64 @@ enum LRCLib {
         var plainLyrics: String?
     }
 
-    /// Fetches the lyrics for a track, preferring an exact metadata match and
-    /// falling back to a fuzzy search.
+    /// Fetches the lyrics for a track.
+    ///
+    /// Several strategies are tried in order, because no single one of them
+    /// covers everything:
+    ///
+    /// 1. An exact lookup with the full metadata (title, artist, album, duration).
+    /// 2. The same lookup without the album: Spotify and LRCLIB disagree about
+    ///    album names often enough that requiring them loses real matches.
+    /// 3. A search by title *and* artist.
+    /// 4. A search by title alone, validated against the artist and the duration.
     ///
     /// - Parameter nowPlaying: the track as Spotify reports it.
     /// - Returns: the parsed lyrics, or `nil` when nothing matched.
     static func fetch(for nowPlaying: NowPlaying) async -> Lyrics? {
-        let exact = await fetchExact(for: nowPlaying)
-        if let exact { return exact }
+        // The three lookups are independent, so they are asked at the same
+        // time.
+        //
+        // Waiting for them one after the other added seconds to every song:
+        // the two exact lookups have to fail before the search even starts,
+        // and LRCLIB is often slow to answer or overloaded (503), so each of
+        // those rounds costs more than a second.
+        await withTaskGroup(of: Lyrics?.self) { group in
+            group.addTask { await fetchExact(for: nowPlaying, includeAlbum: true) }
+            group.addTask { await fetchExact(for: nowPlaying, includeAlbum: false) }
+            group.addTask { await fetchSearch(for: nowPlaying, includeArtist: true) }
 
-        Log.line("lrclib: exact match failed, trying search")
-        return await fetchSearch(for: nowPlaying)
+            // The first answer that passes the validation is used: the
+            // candidates are checked against the title, the artist and the
+            // length of the song, so a wrong song is rejected whoever answers.
+            for await result in group {
+                if let result { return result }
+            }
+
+            // Nothing found. The search without the artist is the last resort:
+            // it returns many songs with the same title, and the validation is
+            // stricter with it.
+            return await fetchSearch(for: nowPlaying, includeArtist: false)
+        }
     }
 
     // MARK: - Exact match
 
-    private static func fetchExact(for nowPlaying: NowPlaying) async -> Lyrics? {
+    private static func fetchExact(for nowPlaying: NowPlaying, includeAlbum: Bool) async -> Lyrics? {
         var components = URLComponents(string: "https://lrclib.net/api/get")!
-        components.queryItems = [
+        var items = [
             URLQueryItem(name: "artist_name", value: nowPlaying.artist),
             URLQueryItem(name: "track_name", value: nowPlaying.title),
-            URLQueryItem(name: "album_name", value: nowPlaying.album),
-            URLQueryItem(name: "duration", value: String(Int(nowPlaying.durationSec.rounded()))),
         ]
+        if includeAlbum {
+            items.append(URLQueryItem(name: "album_name", value: nowPlaying.album))
+        }
+        if nowPlaying.durationSec > 0 {
+            items.append(URLQueryItem(
+                name: "duration",
+                value: String(Int(nowPlaying.durationSec.rounded()))
+            ))
+        }
+        components.queryItems = items
         guard let url = components.url else { return nil }
 
         guard let data = await HTTPCache.shared.data(for: url),
@@ -47,7 +82,7 @@ enum LRCLib {
               let synced = object["syncedLyrics"] as? String,
               !synced.isEmpty
         else {
-            Log.line("lrclib: no exact match")
+            Log.line("lrclib: no exact match (album: \(includeAlbum))")
             return nil
         }
 
@@ -70,18 +105,24 @@ enum LRCLib {
 
     // MARK: - Fuzzy search
 
-    private static func fetchSearch(for nowPlaying: NowPlaying) async -> Lyrics? {
+    /// Searches for the lyrics.
+    ///
+    /// - Parameter includeArtist: whether to narrow the search by artist. When
+    ///   it is off, the results contain many songs with the same title, so the
+    ///   artist and the duration have to be checked more strictly.
+    private static func fetchSearch(for nowPlaying: NowPlaying, includeArtist: Bool) async -> Lyrics? {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
-        components.queryItems = [
-            URLQueryItem(name: "track_name", value: nowPlaying.title),
-            URLQueryItem(name: "artist_name", value: nowPlaying.artist),
-        ]
+        var items = [URLQueryItem(name: "track_name", value: nowPlaying.title)]
+        if includeArtist {
+            items.append(URLQueryItem(name: "artist_name", value: nowPlaying.artist))
+        }
+        components.queryItems = items
         guard let url = components.url else { return nil }
 
         guard let data = await HTTPCache.shared.data(for: url),
               let objects = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else {
-            Log.line("lrclib: search failed")
+            Log.line("lrclib: search failed (artist: \(includeArtist))")
             return nil
         }
 
@@ -97,8 +138,8 @@ enum LRCLib {
             )
         }
 
-        guard let best = pick(candidates, for: nowPlaying) else {
-            Log.line("lrclib: no acceptable match in search results")
+        guard let best = pick(candidates, for: nowPlaying, strict: !includeArtist) else {
+            Log.line("lrclib: no acceptable match in search results (artist: \(includeArtist))")
             return nil
         }
 
@@ -111,8 +152,16 @@ enum LRCLib {
     /// Chooses the candidate whose title matches and whose duration is closest.
     ///
     /// Showing the lyrics of a different song is worse than showing nothing, so
-    /// a candidate has to satisfy both checks.
-    private static func pick(_ candidates: [Candidate], for nowPlaying: NowPlaying) -> Candidate? {
+    /// a candidate has to satisfy the checks below.
+    ///
+    /// - Parameter strict: when the search was made by title alone, the artist
+    ///   has to match as well — the results contain many different songs that
+    ///   share the title.
+    private static func pick(
+        _ candidates: [Candidate],
+        for nowPlaying: NowPlaying,
+        strict: Bool = false
+    ) -> Candidate? {
         let wantTitle = normalise(nowPlaying.title)
         let wantArtist = normalise(nowPlaying.artist)
         guard !wantTitle.isEmpty else { return nil }
@@ -124,12 +173,19 @@ enum LRCLib {
             let titleOk = gotTitle == wantTitle
                 || gotTitle.contains(wantTitle)
                 || wantTitle.contains(gotTitle)
-            let artistOk = wantArtist.isEmpty
-                || gotArtist.isEmpty
-                || gotArtist == wantArtist
-                || gotArtist.contains(wantArtist)
-                || wantArtist.contains(gotArtist)
-            if titleOk && artistOk { titleMatches.append(candidate) }
+            guard titleOk else { continue }
+            // In the strict case the artist has to be a real match, not a
+            // substring: "Danny Ocean" must not match "Danny Ocean Trio".
+            if strict, wantArtist.isEmpty || gotArtist.isEmpty {
+                continue
+            }
+            if strict {
+                let artistMatches = gotArtist == wantArtist
+                    || gotArtist.contains(wantArtist)
+                    || wantArtist.contains(gotArtist)
+                guard artistMatches else { continue }
+            }
+            titleMatches.append(candidate)
         }
 
         guard !titleMatches.isEmpty else { return nil }
@@ -174,7 +230,7 @@ enum LRCLib {
         lines = LyricsParser.filteringCredits(lines)
         guard !lines.isEmpty else { return nil }
 
-        lines = WordInterpolator.interpolate(lines)
+        lines = WordInterpolator.interpolate(lines, weighting: AppSettings.shared.wordTiming)
 
         Log.line("lrclib: \(lines.count) lines, interpolated word timings")
         return Lyrics(

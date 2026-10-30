@@ -185,118 +185,11 @@ enum LyricsParser {
         return result
     }
 
-    // MARK: - richsync (Musixmatch)
-
-    /// Parses the Musixmatch `richsync_body` format.
-    ///
-    /// The body is a JSON array of lines, each with:
-    ///
-    /// - `ts`: when the line starts, in seconds.
-    /// - `te`: when the line ends, in seconds.
-    /// - `l`: the characters of the line, each with an offset `o` in seconds
-    ///   **relative to the start of the line**.
-    /// - `x`: the text of the line, with `\n` where the line breaks.
-    ///
-    /// The character offsets are the finest timing available anywhere: they say
-    /// exactly when each character is sung. The words are built by grouping the
-    /// characters, and each word takes the offset of its first character and
-    /// the end of its last one.
-    ///
-    /// - Returns: the parsed lines, or `nil` when the body could not be read.
-    static func parseRichSync(_ raw: String) -> [LyricLine]? {
-        guard let data = raw.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data),
-              let entries = json as? [[String: Any]]
-        else { return nil }
-
-        var lines: [LyricLine] = []
-
-        for entry in entries {
-            guard let start = entry["ts"] as? Double else { continue }
-            let end = entry["te"] as? Double ?? start
-            let characters = entry["l"] as? [[String: Any]] ?? []
-
-            let words = words(from: characters, lineStart: start, lineEnd: end)
-            let text = (entry["x"] as? String)
-                ?? words.map(\.text).joined()
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard !text.isEmpty, !words.isEmpty else { continue }
-
-            lines.append(LyricLine(
-                startTime: start,
-                endTime: end,
-                text: text,
-                words: words
-            ))
-        }
-
-        return finalize(lines)
-    }
-
-    /// Builds the words of a line from its character offsets.
-    ///
-    /// A word runs from its first character to just before the next word
-    /// starts. The character list does not always contain the spaces (a space
-    /// can be implied by the jump between two characters' offsets), so the end
-    /// of a word is taken from the start of the next word rather than from a
-    /// space character. The last word runs to the end of the line.
-    private static func words(
-        from characters: [[String: Any]],
-        lineStart: Double,
-        lineEnd: Double
-    ) -> [LyricWord] {
-        // First pass: group the characters into words, remembering where each
-        // one starts.
-        struct Partial {
-            var text: String
-            var start: Double
-        }
-
-        var partials: [Partial] = []
-        var current = ""
-        var currentStart: Double?
-
-        for character in characters {
-            guard let value = character["c"] as? String else { continue }
-            let offset = character["o"] as? Double ?? 0
-            let absolute = lineStart + offset
-
-            if value == " " {
-                if !current.isEmpty, let start = currentStart {
-                    partials.append(Partial(text: current, start: start))
-                }
-                current = ""
-                currentStart = nil
-                continue
-            }
-
-            if currentStart == nil { currentStart = absolute }
-            current += value
-        }
-
-        if !current.isEmpty, let start = currentStart {
-            partials.append(Partial(text: current, start: start))
-        }
-
-        // Second pass: each word lasts until the next one starts.
-        return partials.enumerated().map { index, partial in
-            let end = index + 1 < partials.count ? partials[index + 1].start : lineEnd
-            return LyricWord(
-                text: partial.text,
-                startTime: partial.start,
-                duration: max(end - partial.start, 0.01)
-            )
-        }
-    }
-
-    // MARK: - Plain lyrics
-
     /// Parses plain (unsynced) lyrics into lines without timing.
     ///
-    /// The lines are given a placeholder timing so the rest of the app can
-    /// treat them like any other; `WordInterpolator` replaces it with real
-    /// timings derived from the song's own pace.
+    /// The lines are given a placeholder timing so the rest of the app can treat
+    /// them like any other; `distributing` and `WordInterpolator` then replace it
+    /// with timings derived from the song's own length.
     static func parsePlainLyrics(_ raw: String) -> [LyricLine] {
         raw.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -310,6 +203,28 @@ enum LyricsParser {
                     words: []
                 )
             }
+    }
+
+    /// Spreads plain lines over the length of the song.
+    ///
+    /// A source with no timing at all still produces something usable when the
+    /// lines are given plausible positions: the highlight then moves through the
+    /// song with the lyrics, instead of standing still.
+    ///
+    /// - Parameters:
+    ///   - lines: the lines to place.
+    ///   - duration: the length of the song, in seconds.
+    static func distributing(_ lines: [LyricLine], over duration: TimeInterval) -> [LyricLine] {
+        guard !lines.isEmpty else { return [] }
+        let total = duration > 0 ? duration : Double(lines.count) * 4
+        let step = total / Double(lines.count)
+
+        return lines.enumerated().map { index, line in
+            var updated = line
+            updated.startTime = Double(index) * step
+            updated.endTime = Double(index + 1) * step
+            return updated
+        }
     }
 
     // MARK: - Credit filtering

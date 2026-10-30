@@ -47,7 +47,8 @@ struct Lyrics: Equatable {
     enum Source: String {
         case lrclib
         case netease
-        case musixmatch
+        /// Plain lyrics with no timing, used as a last resort.
+        case lyricsOvh
     }
 
     enum WordTimingQuality: String {

@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var tickTimer: Timer?
     private var previewVisible = false
+    /// The monitor that watches for the Escape key while the preview is up.
+    private var localMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Log.line("=== MycSs starting (pid \(ProcessInfo.processInfo.processIdentifier)) ===")
@@ -26,12 +28,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         lockState.start()
 
+        // The Spotify polling runs for the whole life of the app: while the Mac
+        // is unlocked the app keeps knowing which track is playing, so the
+        // lyrics are already loading when the screen is locked.
+        overlayController.startListening()
+
         // Safety net: the lock/unlock notifications are the primary signal, but a
         // periodic tick guarantees the overlay appears even if a notification is
         // missed (for example if the app was launched while the screen was
         // already locked).
-        tickTimer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.overlayController.tick() }
+        // The overlay has to follow the lock screen into its Space, and the lock
+        // screen creates that Space a fraction of a second after the lock. A
+        // short tick keeps that follow-up tight, so the lyrics appear as soon
+        // as the lock screen is really on screen.
+        tickTimer = Timer(timeInterval: 0.08, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.overlayController.tick()
+                // The lock screen creates its Space a moment after the lock
+                // notification, so the overlay follows it into place.
+                self?.overlayController.followLockScreen()
+            }
         }
         tickTimer?.tolerance = 0.2
         RunLoop.main.add(tickTimer!, forMode: .common)
@@ -42,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--preview") {
             Log.line("=== preview mode requested ===")
             overlayController.showPreview()
+            previewVisible = true
+            installPreviewEscapeKey()
         }
 
         // `--snapshot <path>` writes a PNG of the overlay, for checking the
@@ -57,6 +75,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.overlayController.forceHint()
                 }
                 self?.overlayController.snapshot(to: path)
+                NSApp.terminate(nil)
+            }
+        }
+
+        // `--snapshot-seq <prefix> [count] [interval]` writes several PNGs a
+        // moment apart, so the movement of the lyrics can be checked frame by
+        // frame.
+        if let index = CommandLine.arguments.firstIndex(of: "--snapshot-seq"),
+           CommandLine.arguments.count > index + 1 {
+            let prefix = CommandLine.arguments[index + 1]
+            let count = CommandLine.arguments.count > index + 2
+                ? (Int(CommandLine.arguments[index + 2]) ?? 26)
+                : 26
+            let interval = CommandLine.arguments.count > index + 3
+                ? (Double(CommandLine.arguments[index + 3]) ?? 1.5)
+                : 1.5
+            for step in 0..<count {
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + Double(step) * interval + 2
+                ) { [weak self] in
+                    self?.overlayController.snapshot(to: "\(prefix)-\(step).png")
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(count) * interval + 3) {
                 NSApp.terminate(nil)
             }
         }
@@ -177,6 +219,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overlayController.showPreview()
         }
         previewVisible.toggle()
+    }
+
+    /// Closes the preview when Escape is pressed.
+    ///
+    /// The preview covers the whole screen, so the menu bar item that would
+    /// normally turn it off is hard to reach. Escape is the escape hatch.
+    ///
+    /// The event is only acted on when it comes from a real key press: the app
+    /// also receives synthetic key events from other sources, and reacting to
+    /// those would close the preview on its own.
+    private func installPreviewEscapeKey() {
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53,  // Escape
+                  self?.previewVisible == true,
+                  event.isARepeat == false,
+                  event.window != nil
+            else { return event }
+            MainActor.assumeIsolated {
+                self?.overlayController.hidePreview()
+                self?.previewVisible = false
+            }
+            return nil
+        }
     }
 
     @objc private func quit() {

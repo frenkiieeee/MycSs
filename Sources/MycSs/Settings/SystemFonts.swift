@@ -6,8 +6,12 @@ import Foundation
 ///
 /// The list is built with CoreText, which sees every font the system has,
 /// including the ones AppKit's font manager hides. On this machine there are
-/// around 2,700, so the list is sorted by family name and deduplicated by
-/// PostScript name.
+/// around 2,700.
+///
+/// **The system font is a special case**: Apple's own typeface (SF Pro) cannot
+/// be requested by name — CoreText refuses to hand out the system fonts, and
+/// falls back to Times — so it is represented by a sentinel and resolved
+/// through `NSFont.systemFont`, which is the only correct way to get it.
 enum SystemFonts {
 
     /// One selectable font.
@@ -28,12 +32,24 @@ enum SystemFonts {
         }
     }
 
+    /// The name that stands for Apple's system font.
+    static let systemFontSentinel = "__system__"
+
     private static var cached: [Entry]?
 
     /// All installed fonts, sorted by family name.
+    ///
+    /// The system font comes first, because it is the app's default.
     static func all() -> [Entry] {
         if let cached { return cached }
-        let entries = build()
+        var entries: [Entry] = [
+            Entry(
+                postScriptName: systemFontSentinel,
+                familyName: "SF Pro (sistema)",
+                styleName: ""
+            )
+        ]
+        entries.append(contentsOf: build())
         cached = entries
         return entries
     }
@@ -48,8 +64,9 @@ enum SystemFonts {
             NSHomeDirectory() + "/Library/Fonts",
         ]
         // Fonts installed by applications live in their own bundles.
-        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        if let applicationSupport {
+        if let applicationSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first {
             searchPaths.append(applicationSupport.path(percentEncoded: false) + "/Fonts")
         }
 
@@ -92,11 +109,15 @@ enum SystemFonts {
         }
     }
 
-    /// Creates a font, falling back to the system font if the name is unknown.
+    /// Creates a font.
+    ///
+    /// The system font is resolved through `NSFont.systemFont`, because it cannot
+    /// be created by name. Any other font falls back to the system font when the
+    /// name is unknown.
     static func font(postScriptName: String, size: CGFloat) -> NSFont {
-        NSFont(name: postScriptName, size: size) ?? NSFont.systemFont(ofSize: size)
+        if postScriptName == systemFontSentinel {
+            return NSFont.systemFont(ofSize: size, weight: .bold)
+        }
+        return NSFont(name: postScriptName, size: size) ?? NSFont.systemFont(ofSize: size, weight: .bold)
     }
-
-    /// The font used by default.
-    static let defaultName = "SFProRounded-Bold"
 }

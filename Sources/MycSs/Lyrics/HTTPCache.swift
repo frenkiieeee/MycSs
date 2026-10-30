@@ -1,16 +1,14 @@
 import Foundation
 
-/// A cached HTTP client shared by the lyric providers.
+/// A cache of HTTP responses with retries, used by the lyric providers.
 ///
-/// Two behaviours matter here, both learned from running against the live
-/// services:
+/// **Why the retries matter**: LRCLIB, the main lyric source, fails with
+/// `503 ServerOverloaded` very often — measured on this machine, four of five
+/// back-to-back requests failed while one succeeded. It is a transient
+/// condition, not a missing lyric, so the request has to be tried again.
 ///
-/// - **LRCLIB returns `503 ServerOverloaded` intermittently.** Measured on this
-///   machine: three of four back-to-back requests failed with 503 and the fourth
-///   succeeded. It is a transient condition, so requests are retried with a
-///   backoff rather than treated as a failure.
-/// - **The services are slow enough to be noticeable.** A request can take over
-///   a second, so they run off the main thread.
+/// The retries are spaced out so the service gets a chance to recover, and the
+/// backoff grows so a genuinely missing lyric is not hammered.
 actor HTTPCache {
 
     static let shared = HTTPCache()
@@ -26,18 +24,20 @@ actor HTTPCache {
 
     private var memoryCache: [String: Data] = [:]
 
+    /// How many times a request is tried before giving up.
+    private let maxAttempts = 5
+
     /// Returns the body for `url`, fetching it if needed.
     ///
     /// - Parameter url: the request URL, which is also the cache key.
-    /// - Returns: the response body, or `nil` if every attempt failed.
+    /// - Returns: the response body, or `nil` when every attempt failed.
     func data(for url: URL, headers: [String: String] = [:]) async -> Data? {
         if let cached = memoryCache[url.absoluteString] {
             return cached
         }
 
         // Disk cache: a lyric that was already downloaded must never be
-        // requested again. LRCLIB is often overloaded, and re-fetching a known
-        // lyric is pure waste.
+        // requested again.
         if let onDisk = DiskCache.read(url.absoluteString) {
             memoryCache[url.absoluteString] = onDisk
             return onDisk
@@ -51,12 +51,7 @@ actor HTTPCache {
 
     /// Performs the request, retrying transient failures with a backoff.
     private func fetch(url: URL, headers: [String: String]) async -> Data? {
-        var attempt = 0
-        let maxAttempts = 4
-
-        while attempt < maxAttempts {
-            attempt += 1
-
+        for attempt in 1...maxAttempts {
             do {
                 var request = URLRequest(url: url)
                 for (name, value) in headers {
@@ -77,7 +72,9 @@ actor HTTPCache {
                         Log.line("http: 404 for \(url.lastPathComponent)")
                         return nil
                     case 429, 500...599:
-                        Log.line("http: \(http.statusCode), retry \(attempt)/\(maxAttempts)")
+                        // The service is overloaded or rate-limiting. This is
+                        // the common case for LRCLIB, and it is worth waiting.
+                        Log.line("http: \(http.statusCode), attempt \(attempt)/\(maxAttempts)")
                     default:
                         Log.warn("http: unexpected \(http.statusCode) for \(url.absoluteString)")
                         return nil
@@ -86,11 +83,11 @@ actor HTTPCache {
                     return data
                 }
             } catch {
-                Log.line("http: request failed (\(error.localizedDescription)), retry \(attempt)/\(maxAttempts)")
+                Log.line("http: request failed (\(error.localizedDescription)), attempt \(attempt)/\(maxAttempts)")
             }
 
-            // Backoff: 0.4s, 0.8s, 1.6s.
-            let delay = UInt64(0.4 * pow(2, Double(attempt - 1)) * 1_000_000_000)
+            // Backoff: 0.3s, 0.6s, 1.2s, 2.4s.
+            let delay = UInt64(0.3 * pow(2, Double(attempt - 1)) * 1_000_000_000)
             try? await Task.sleep(nanoseconds: delay)
         }
 
