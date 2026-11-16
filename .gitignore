@@ -2,3 +2,6 @@
 MycSs.app/
 *.xcodeproj
 .DS_Store
+
+Assets/Mascot/dist/
+.dev-signing/

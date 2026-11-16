@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift build:*)",
+      "Bash(./scripts/verify.sh)",
+      "Bash(./build-app.sh:*)",
+      "Bash(./MycSs.app/Contents/MacOS/MycSs --selftest)",
+      "Bash(./.build/debug/MycSs --selftest)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)"
+    ]
+  }
+}
