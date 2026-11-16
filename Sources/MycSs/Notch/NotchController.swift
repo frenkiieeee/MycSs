@@ -23,6 +23,14 @@ final class NotchController {
     private let volumeWatcher = VolumeWatcher()
 
     private var panel: NotchPanel?
+    /// The notch on the other screens, when the user wants it there too.
+    private struct ExtraNotch {
+        let id: CGDirectDisplayID
+        let panel: NotchPanel
+        let screenFrame: CGRect
+        let geometry: NotchGeometry
+    }
+    private var extras: [ExtraNotch] = []
     private var geometry = NotchGeometry(notch: CGSize(width: 185, height: 32))
     private var screenFrame: CGRect = .zero
     private var displayID: CGDirectDisplayID = CGMainDisplayID()
@@ -59,6 +67,7 @@ final class NotchController {
             syncOpenState()
             if !isSelfTesting { updateListening() }
             if !isSelfTesting { updateServices() }
+            if !isSelfTesting { syncExtraNotches() }
             updatePeek()
             updateKeys()
             updateAudio()
@@ -98,7 +107,7 @@ final class NotchController {
         let panel = NotchPanel(frame: frame)
         agenda.prepare()
         let host = NotchHostingView(rootView: NotchRoot(
-            notch: notch, model: model, services: services, geometry: geometry
+            notch: notch, model: model, services: services, geometry: geometry, display: id
         ))
         host.frame = NSRect(origin: .zero, size: size)
         host.autoresizingMask = [.width, .height]
@@ -129,7 +138,9 @@ final class NotchController {
             ), for: 8)
         }
         notch.isPointerInside = { [weak self] in
-            self?.currentZone(padding: 10).contains(NSEvent.mouseLocation) ?? false
+            guard let self else { return false }
+            let openOn = self.notch.openDisplay == 0 ? self.displayID : self.notch.openDisplay
+            return self.currentZone(padding: 10, display: openOn).contains(NSEvent.mouseLocation)
         }
 
         // The volume, whoever changes it.
@@ -167,7 +178,63 @@ final class NotchController {
         insideSince = nil
         panel?.orderOut(nil)
         panel = nil
+        removeExtraNotches()
         Log.line("notch: hidden")
+    }
+
+    // MARK: - Other screens
+
+    /// The size of the cut-out of a screen, or a pill where there is none.
+    private func notchGeometry(for screen: NSScreen) -> NotchGeometry {
+        if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea,
+           screen.safeAreaInsets.top > 0 {
+            return NotchGeometry(notch: CGSize(
+                width: max(right.minX - left.maxX, 120),
+                height: screen.safeAreaInsets.top
+            ))
+        }
+        return NotchGeometry(notch: CGSize(width: 170, height: 28))
+    }
+
+    /// Keeps one notch on every other screen while the setting asks for it, and
+    /// follows screens being plugged in, unplugged or moved.
+    private func syncExtraNotches() {
+        let wanted: [NSScreen] = AppSettings.shared.notchDisplays == .all
+            ? NSScreen.screens.filter { $0.displayID != displayID && $0.displayID != nil }
+            : []
+        let same = wanted.count == extras.count
+            && zip(wanted, extras).allSatisfy { $0.displayID == $1.id && $0.frame == $1.screenFrame }
+        guard !same else { return }
+
+        removeExtraNotches()
+        for screen in wanted {
+            guard let id = screen.displayID else { continue }
+            let geometry = notchGeometry(for: screen)
+            let size = geometry.panelSize
+            let frame = NSRect(
+                x: screen.frame.midX - size.width / 2,
+                y: screen.frame.maxY - size.height,
+                width: size.width, height: size.height
+            )
+            let panel = NotchPanel(frame: frame)
+            let host = NotchHostingView(rootView: NotchRoot(
+                notch: notch, model: model, services: services, geometry: geometry, display: id
+            ))
+            host.frame = NSRect(origin: .zero, size: size)
+            host.autoresizingMask = [.width, .height]
+            panel.contentView = host
+            panel.orderFrontRegardless()
+            _ = SkyLight.shared.pinToAllDesktops(panel)
+            extras.append(ExtraNotch(id: id, panel: panel, screenFrame: screen.frame, geometry: geometry))
+            Log.line("notch: also on display \(id), cut-out \(Int(geometry.notch.width))x\(Int(geometry.notch.height))")
+        }
+    }
+
+    private func removeExtraNotches() {
+        guard !extras.isEmpty else { return }
+        for extra in extras { extra.panel.orderOut(nil) }
+        extras = []
+        Log.line("notch: removed from the other displays")
     }
 
     /// Things that follow the notch opening or closing.
@@ -289,8 +356,13 @@ final class NotchController {
     /// it closes an open notch the pointer has left, opens a closed one the
     /// pointer rests on, and opens the shelf when files are dragged to it.
     private func reconcilePointer() {
-        let point = NSEvent.mouseLocation
-        let inside = currentZone(padding: notch.isOpen ? 12 : 4).contains(point)
+        // Open, the notch that matters is the one that is open; closed, the one under the pointer.
+        let openOn = notch.openDisplay == 0 ? displayID : notch.openDisplay
+        let under = notch.isOpen ? nil : displayUnderPointer(padding: 4)
+        let inside = notch.isOpen
+            ? currentZone(padding: 12, display: openOn).contains(NSEvent.mouseLocation)
+            : under != nil
+        if let under { notch.hoverDisplay = under }
 
         if notch.isOpen {
             insideSince = nil
@@ -320,19 +392,35 @@ final class NotchController {
         }
     }
 
-    /// The rectangle the notch occupies on screen right now.
-    private func currentZone(padding: CGFloat) -> CGRect {
+    /// The rectangle the notch occupies on a screen right now (0 is the main one).
+    private func currentZone(padding: CGFloat, display: CGDirectDisplayID = 0) -> CGRect {
+        var frame = screenFrame
+        var geo = geometry
+        var id = displayID
+        if display != 0, display != displayID, let extra = extras.first(where: { $0.id == display }) {
+            frame = extra.screenFrame
+            geo = extra.geometry
+            id = extra.id
+        }
         let layout = NotchLayout(
-            notch: notch, geometry: geometry,
-            hasTrack: model.track.hasTrack, timerActive: services.timer.isActive
+            notch: notch, geometry: geo,
+            hasTrack: model.track.hasTrack, timerActive: services.timer.isActive,
+            display: id
         )
         let width = layout.body.width + layout.ear * 2
         return CGRect(
-            x: screenFrame.midX - width / 2 - padding,
-            y: screenFrame.maxY - layout.body.height - padding,
+            x: frame.midX - width / 2 - padding,
+            y: frame.maxY - layout.body.height - padding,
             width: width + padding * 2,
             height: layout.body.height + padding
         )
+    }
+
+    /// The screen whose notch the pointer is on, if any.
+    private func displayUnderPointer(padding: CGFloat) -> CGDirectDisplayID? {
+        let point = NSEvent.mouseLocation
+        let ids = [displayID] + extras.map(\.id)
+        return ids.first { currentZone(padding: padding, display: $0).contains(point) }
     }
 
     /// Whether the user is dragging files right now. The drag pasteboard keeps its

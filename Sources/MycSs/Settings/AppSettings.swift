@@ -356,6 +356,26 @@ final class AppSettings {
         set { defaults.set(newValue.rawValue, forKey: "notchPeekStyle") }
     }
 
+    /// On which screens the notch shows.
+    enum NotchDisplays: String, CaseIterable {
+        /// Only the screen of the Mac (the one with the notch).
+        case builtIn
+        /// Also on every other screen, as a pill at the top.
+        case all
+
+        var title: String {
+            switch self {
+            case .builtIn: return "Solo la pantalla de la Mac"
+            case .all: return "Todas las pantallas"
+            }
+        }
+    }
+
+    var notchDisplays: NotchDisplays {
+        get { NotchDisplays(rawValue: defaults.string(forKey: "notchDisplays") ?? "") ?? .all }
+        set { defaults.set(newValue.rawValue, forKey: "notchDisplays") }
+    }
+
     /// How far the notch grows to each side for the new song, as a multiple of the
     /// default. It also scales the cover and the text that go on those sides.
     var notchPeekWidth: Double {

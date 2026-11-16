@@ -156,6 +156,14 @@ struct NotchSettingsPage: View {
     private var music: some View {
         Section("Música") {
             Toggle("Mostrar el notch de MycSs", isOn: $settings.notchEnabled)
+            if NSScreen.screens.count > 1 || settings.notchDisplays == .all {
+                Picker("Pantallas", selection: $settings.notchDisplays) {
+                    ForEach(AppSettings.NotchDisplays.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Text("Con otra pantalla conectada, el notch también sale arriba en el centro, como una píldora. Se abre solo en la pantalla donde pones el puntero.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             Toggle("Portada y visualizador a los lados mientras suena", isOn: $settings.notchWings)
             Toggle("Plegar el notch cuando no suena nada", isOn: $settings.notchHideWhenIdle)
             Toggle("Mostrar título y artista al cambiar de canción", isOn: $settings.notchPeek)

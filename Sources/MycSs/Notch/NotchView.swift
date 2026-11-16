@@ -69,13 +69,16 @@ struct NotchLayout: Equatable {
     var isOpen: Bool { kind == .open }
 
     @MainActor
-    init(notch: NotchModel, geometry: NotchGeometry, hasTrack: Bool, timerActive: Bool = false) {
+    init(notch: NotchModel, geometry: NotchGeometry, hasTrack: Bool, timerActive: Bool = false,
+         display: CGDirectDisplayID = 0) {
         let cut = geometry.notch
         let settings = AppSettings.shared
         let music = hasTrack && notch.isListening
         let wings = (settings.notchWings && music) || timerActive
+        // On another screen it opens only where the pointer was; the others stay closed.
+        let openHere = notch.isOpen && (display == 0 || notch.openDisplay == 0 || notch.openDisplay == display)
 
-        if notch.isOpen {
+        if openHere {
             kind = .open
             body = NotchGeometry.openSize
             ear = NotchGeometry.openEar
@@ -233,6 +236,8 @@ struct NotchView: View {
     @Bindable var model: LyricsViewModel
     let services: NotchServices
     let geometry: NotchGeometry
+    /// The screen this notch is on (0 when there is only one).
+    var display: CGDirectDisplayID = 0
     /// Goes up when a setting changes, so a settings preview is drawn again at once.
     var revision = 0
 
@@ -243,7 +248,8 @@ struct NotchView: View {
         let _ = revision
         let timerActive = services.timer.isActive
         let layout = NotchLayout(
-            notch: notch, geometry: geometry, hasTrack: model.track.hasTrack, timerActive: timerActive
+            notch: notch, geometry: geometry, hasTrack: model.track.hasTrack, timerActive: timerActive,
+            display: display
         )
         let scale = NotchGeometry.scale
         let settings = AppSettings.shared
@@ -290,7 +296,7 @@ struct NotchView: View {
         .animation(widthAnimation, value: layout.bottomRadius)
         .shadow(color: .black.opacity(layout.isOpen ? 0.45 : 0), radius: 14, y: 6)
         .contentShape(Rectangle())
-        .onHover { notch.hover($0) }
+        .onHover { notch.hover($0, display: display) }
         .onTapGesture {
             // A notification is answered by opening its app; anything else, by
             // opening the notch.
@@ -298,6 +304,7 @@ struct NotchView: View {
                 services.notifications.open(notification)
                 notch.dismissNotification()
             } else {
+                notch.hoverDisplay = display
                 notch.open()
             }
         }
@@ -313,12 +320,13 @@ struct NotchRoot: View {
     @Bindable var model: LyricsViewModel
     let services: NotchServices
     let geometry: NotchGeometry
+    var display: CGDirectDisplayID = 0
     @Bindable var revision = SettingsRevision.shared
 
     var body: some View {
         NotchView(
             notch: notch, model: model, services: services,
-            geometry: geometry, revision: revision.value
+            geometry: geometry, display: display, revision: revision.value
         )
     }
 }

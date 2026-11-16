@@ -224,6 +224,8 @@ en Ajustes del Sistema › Notificaciones. Probado con una base sintética con e
 esquema (`--notification-selftest`); con la real, sin el permiso, el estado es
 «denegado» y no se ha podido probar aquí.
 
+**Varias pantallas.** Con otra pantalla conectada el notch sale también en ella, como una píldora arriba en el centro (Preferencias › Notch › Pantallas: solo la de la Mac, o todas; por defecto todas). Cada pantalla enseña lo mismo, pero se abre solo en la que pones el puntero. Se añade y se quita al conectar o desconectar pantallas.
+
 **Movimiento y aspecto.** Preferencias › Notch elige el movimiento (suave, elástica,
 rápida, lenta), cómo se abre (a la vez, o primero a los lados y luego hacia abajo),
 cómo se muestra una canción nueva (hacia los lados o hacia abajo), el visualizador

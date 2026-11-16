@@ -149,6 +149,11 @@ final class NotchModel {
     @ObservationIgnored private var peekTask: Task<Void, Never>?
     @ObservationIgnored private var hudTask: Task<Void, Never>?
 
+    /// With more than one screen, the one where the pointer is (set before it opens) and
+    /// the one where it opened. 0 is "the main one". The notch opens only on that screen.
+    var hoverDisplay: CGDirectDisplayID = 0
+    private(set) var openDisplay: CGDirectDisplayID = 0
+
     /// How long the pointer has to rest on the notch before it opens, so that
     /// crossing the top of the screen does not open it.
     private let openDelay: UInt64 = 90_000_000
@@ -157,9 +162,10 @@ final class NotchModel {
     // MARK: - Hover
 
     /// The hover of the notch's own shape.
-    func hover(_ inside: Bool) {
+    func hover(_ inside: Bool, display: CGDirectDisplayID = 0) {
         hoverTask?.cancel()
         isHovering = inside
+        if inside { hoverDisplay = display }
 
         if inside {
             guard !isOpen else { return }
@@ -183,6 +189,7 @@ final class NotchModel {
     func open(tab: NotchTab? = nil, haptic: Bool = false) {
         if let tab { self.tab = tab }
         guard !isOpen else { return }
+        openDisplay = hoverDisplay
         isOpen = true
         isPeeking = false
         peekTask?.cancel()
