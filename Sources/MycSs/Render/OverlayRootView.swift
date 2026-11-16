@@ -19,9 +19,19 @@ struct OverlayRootView: View {
     /// and the overlay keeps showing an empty screen.
     @Bindable var model: LyricsViewModel
 
+    /// The display this copy of the overlay is on, so the regions it reports can
+    /// be turned into screen coordinates.
+    var displayID: CGDirectDisplayID = CGMainDisplayID()
+
+    /// Goes up when a setting changes. A settings preview passes it so the view is
+    /// drawn again at once: the settings live in `UserDefaults`, which SwiftUI
+    /// does not watch.
+    var revision = 0
+
     private var settings: AppSettings { .shared }
 
     var body: some View {
+        let _ = revision
         // The outermost view is a plain rectangle that fills whatever space it is
         // given. Without it, a `GeometryReader` at the root has nothing to
         // measure and the whole view collapses to a few points — the window is on
@@ -38,7 +48,10 @@ struct OverlayRootView: View {
                 // lyrics start further to the right, so neither of them crowds
                 // the other.
                 let sideMargin = width * 0.075
-                let coverWidth = min(settings.artworkSize, width * 0.42)
+                // With the player under it, the cover also has to leave room for it in
+                // the height of the screen.
+                let controlsOn = settings.showPlayerControls && model.track.hasTrack
+                let coverWidth = min(settings.artworkSize, width * 0.42, height * (controlsOn ? 0.42 : 0.6))
                 // The column is the cover plus the margin that keeps it away
                 // from the edge of the screen.
                 let artworkColumn = coverWidth + sideMargin * 0.9
@@ -52,36 +65,78 @@ struct OverlayRootView: View {
                     BackgroundView(
                         theme: model.theme,
                         mode: settings.backgroundMode,
-                        intensity: settings.animationIntensity
+                        intensity: settings.animationIntensity,
+                        artwork: model.artwork
                     )
                     .frame(width: width, height: height)
 
                     VStack(spacing: 0) {
+                        // The clock goes after a few seconds if the user wants it
+                        // to. Its space stays reserved, so the cover does not move:
+                        // only the lyrics grow upwards into it.
                         if settings.showClock {
                             clock
                                 .padding(.bottom, height * 0.03)
+                                .opacity(model.clockHidden ? 0 : 1)
+                                .offset(y: model.clockHidden ? -height * 0.02 : 0)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { model.clockSpace = $0 }
                         }
 
-                        HStack(alignment: .center, spacing: columnGap) {
+                        // The cover moves to the middle when the song has no lyrics,
+                        // and back to the left if they turn up later.
+                        let centered = settings.centerCoverWithoutLyrics
+                            && settings.showArtwork
+                            && model.lyricsNotFound
+                            && !isLoading
+                        let lyricsWidth = width - artworkColumn - columnGap - sideMargin * 2
+
+                        ZStack(alignment: .topLeading) {
+                            // The lyrics keep their full width even when hidden, so
+                            // they are not laid out again while the cover moves.
+                            lyricsColumn
+                                .frame(width: lyricsWidth)
+                                .frame(maxWidth: .infinity, alignment: settings.coverOnRight ? .leading : .trailing)
+                                .padding(.top, settings.showClock && model.clockHidden ? -model.clockSpace : 0)
+                                .modifier(SongChangeEffect(
+                                    kind: settings.songTransition,
+                                    reveal: model.lyricsReveal,
+                                    leaving: model.lyricsLeaving,
+                                    distance: height * 0.05
+                                ))
+                                // Hidden while the cover is in the middle, and while the
+                                // lyrics load and nothing is left to show.
+                                .opacity(centered || (isLoading && model.lyrics == nil) ? 0 : 1)
+                                .animation(.smooth(duration: 0.4), value: centered)
+                                .screenRegion("lyrics", model: model, display: displayID, active: !centered)
+
                             if settings.showArtwork {
                                 artworkColumnView(
                                     isLoading: isLoading,
                                     coverWidth: coverWidth,
-                                    columnWidth: artworkColumn
+                                    columnWidth: centered ? coverWidth : artworkColumn,
+                                    controls: controlsOn
                                 )
+                                .frame(maxWidth: .infinity, alignment: centered ? .center : (settings.coverOnRight ? .trailing : .leading))
                             }
-
-                            lyricsColumn
-                                .frame(width: width - artworkColumn - columnGap - sideMargin * 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .opacity(isLoading ? 0 : 1)
                         }
                         .frame(maxHeight: .infinity, alignment: .center)
+                        .animation(.smooth(duration: 0.75), value: centered)
                     }
                     .padding(.horizontal, sideMargin)
                     .padding(.top, height * 0.045)
                     .padding(.bottom, height * 0.055)
                     .frame(width: width, height: height, alignment: .topLeading)
+                    .animation(.smooth(duration: 0.9), value: model.clockHidden)
+
+                    // A small signature, right in the bottom left corner. It shows
+                    // while the user is active and goes when nothing moves.
+                    Text("@frenkiieeee")
+                        .font(.system(size: max(11, height * 0.0145), weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.55 * model.watermarkReveal))
+                        .padding(.leading, max(10, width * 0.009))
+                        .padding(.bottom, max(8, height * 0.013))
+                        .frame(width: width, height: height, alignment: .bottomLeading)
+                        .allowsHitTesting(false)
                 }
                 .frame(width: width, height: height)
                 .ignoresSafeArea()
@@ -93,6 +148,7 @@ struct OverlayRootView: View {
 
                 // The hint sits above everything, in the middle of the screen
                 // where the password field is, and along the bottom.
+                if model.showsPasswordHint {
                 PasswordHintView(
                     reveal: model.hintReveal,
                     isTyping: model.isTyping,
@@ -104,9 +160,10 @@ struct OverlayRootView: View {
                     // The same margin as the cover and the title, so the
                     // password hint is in line with them.
                     sideMargin: sideMargin,
-                    onRevealRect: { rect in model.setRevealRect(rect) }
+                    onRevealRect: { rect in model.setRegion("eye", display: displayID, frame: rect) }
                 )
                 .frame(width: width, height: height)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -115,19 +172,7 @@ struct OverlayRootView: View {
     // MARK: - Clock
 
     private var clock: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let date = context.date
-            VStack(spacing: 4) {
-                Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.72))
-                Text(date.formatted(.dateTime.hour().minute()))
-                    .font(.system(size: 104, weight: .light, design: .rounded))
-                    .foregroundStyle(.white)
-                    .shadow(color: model.theme.accent.color.opacity(0.35), radius: 34)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
+        ClockView(model: model)
     }
 
     // MARK: - Artwork
@@ -142,7 +187,12 @@ struct OverlayRootView: View {
     /// own left edge — not to the edge of the column, which is wider than the
     /// cover and would leave the text hanging outside it.
     @ViewBuilder
-    private func artworkColumnView(isLoading: Bool, coverWidth: CGFloat, columnWidth: CGFloat) -> some View {
+    private func artworkColumnView(
+        isLoading: Bool,
+        coverWidth: CGFloat,
+        columnWidth: CGFloat,
+        controls: Bool
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             artwork
                 .frame(width: coverWidth, height: coverWidth)
@@ -156,18 +206,37 @@ struct OverlayRootView: View {
             .frame(width: coverWidth, alignment: .leading)
 
             if settings.showTrackInfo {
-                trackInfo
-                    // A fixed width, so the text is laid out inside the cover's
-                    // width and starts at its left edge.
-                    //
-                    // The title and the artist are shown as soon as they are
-                    // known: making them wait for the lyrics left the screen
-                    // with a cover and nothing else for seconds.
-                    .frame(width: coverWidth, alignment: .leading)
+                // The title and the artist change with their own movement, so a new
+                // song does not swap the text in a single frame.
+                ZStack(alignment: .topLeading) {
+                    trackInfo
+                        .id(model.track.trackKey)
+                        .transition(settings.songTransition.textTransition)
+                }
+                // A fixed width, so the text is laid out inside the cover's
+                // width and starts at its left edge.
+                //
+                // The title and the artist are shown as soon as they are
+                // known: making them wait for the lyrics left the screen
+                // with a cover and nothing else for seconds.
+                .frame(width: coverWidth, alignment: .leading)
+                .animation(
+                    settings.songTransition == .off ? nil : .smooth(duration: max(0.25, settings.songTransitionSeconds * 0.7)),
+                    value: model.track.trackKey
+                )
+            }
+
+            // The player: progress, times and the three buttons.
+            if controls {
+                PlayerControlsView(model: model, displayID: displayID, width: coverWidth)
+                    .padding(.top, 6)
             }
         }
+        // What counts as "inside" for a click: outside it, a click closes the
+        // overlay.
+        .screenRegion("cover", model: model, display: displayID)
         // The column itself hugs the cover, so nothing is centred inside it.
-        .frame(width: columnWidth, alignment: .leading)
+        .frame(width: columnWidth, alignment: settings.coverOnRight ? .trailing : .leading)
         .animation(.smooth(duration: 0.55), value: isLoading)
     }
 
@@ -179,22 +248,34 @@ struct OverlayRootView: View {
     private var artwork: some View {
         ZStack {
             // The old cover is only drawn while the new one is fading in.
+            let kind = settings.songTransition
+            let fade = model.artworkOpacity
             if model.artwork != nil, let previous = model.previousArtwork {
                 Image(nsImage: previous)
                     .resizable()
                     .aspectRatio(1, contentMode: .fit)
+                    // The old one steps back as the new one arrives.
+                    .scaleEffect(kind == .cinematic || kind == .glide ? 1 - 0.04 * fade : 1)
+                    .blur(radius: kind == .cinematic ? 6 * fade : 0)
             }
             if let current = model.artwork {
                 Image(nsImage: current)
                     .resizable()
                     .aspectRatio(1, contentMode: .fit)
-                    .opacity(model.artworkOpacity)
+                    // The new one comes from a little bigger and settles.
+                    .scaleEffect(kind == .cinematic || kind == .glide ? 1 + 0.05 * (1 - fade) : 1)
+                    .blur(radius: kind == .cinematic ? 8 * (1 - fade) : 0)
+                    .opacity(fade)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.55), radius: 30, y: 14)
         .shadow(color: model.theme.accent.color.opacity(0.3), radius: 40)
+        // Like Apple Music: the cover steps back when the music is paused and
+        // comes forward when it plays.
+        .scaleEffect(model.isPlayingNow || !model.track.hasTrack ? 1 : 0.88)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7), value: model.isPlayingNow)
     }
 
     // MARK: - Lyrics
@@ -217,16 +298,19 @@ struct OverlayRootView: View {
     /// together when the text is made bigger.
     private var trackInfo: some View {
         let scale = settings.fontSize / 42
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(model.track.title)
-                .font(.system(size: 24 * scale, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(model.track.artist)
-                .font(.system(size: 19 * scale, weight: .regular))
-                .foregroundStyle(.white.opacity(0.65))
-                .lineLimit(1)
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.track.title)
+                    .font(.system(size: 24 * scale, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(model.track.artist)
+                    .font(.system(size: 19 * scale, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
         }
         // Leading alignment, and no `maxWidth: .infinity`: an infinite width
         // would override the width set by the caller and push the text to the
@@ -235,3 +319,48 @@ struct OverlayRootView: View {
     }
 }
 
+
+
+// MARK: - Change of song
+
+/// How the lyrics column goes and comes when the song changes: it fades, it
+/// also slides (up on the way out, from below on the way in), and in the
+/// cinematic style it also loses focus and shrinks a little.
+struct SongChangeEffect: ViewModifier {
+    var kind: AppSettings.SongTransition
+    /// 1 when the column is all there, 0 when it is gone.
+    var reveal: Double
+    var leaving: Bool
+    var distance: CGFloat
+
+    func body(content: Content) -> some View {
+        let away = 1 - reveal
+        content
+            .opacity(kind == .off ? 1 : reveal)
+            .offset(y: kind == .glide || kind == .cinematic ? (leaving ? -1 : 1) * away * distance : 0)
+            .blur(radius: kind == .cinematic ? away * 10 : 0)
+            .scaleEffect(kind == .cinematic ? 1 - away * 0.04 : 1, anchor: .leading)
+    }
+}
+
+extension AppSettings.SongTransition {
+    /// What the title and the artist do when they are replaced.
+    var textTransition: AnyTransition {
+        switch self {
+        case .off:
+            return .identity
+        case .fade:
+            return .opacity
+        case .glide:
+            return .asymmetric(
+                insertion: .opacity.combined(with: .offset(y: 14)),
+                removal: .opacity.combined(with: .offset(y: -10))
+            )
+        case .cinematic:
+            return .asymmetric(
+                insertion: AnyTransition(.blurReplace).combined(with: .offset(y: 14)),
+                removal: AnyTransition(.blurReplace).combined(with: .offset(y: -10))
+            )
+        }
+    }
+}

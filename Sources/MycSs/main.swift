@@ -19,6 +19,33 @@ if CommandLine.arguments.contains("--inspect-spaces") {
     exit(0)
 }
 
+if CommandLine.arguments.contains("--notification-selftest") {
+    Task { @MainActor in
+        await NotificationSelfTest.run()
+        exit(0)
+    }
+    application.run()
+    exit(0)
+}
+
+if CommandLine.arguments.contains("--cover-bench") {
+    Task {
+        await LyricsBench.runCovers()
+        exit(0)
+    }
+    application.run()
+    exit(0)
+}
+
+if CommandLine.arguments.contains("--lyrics-bench") {
+    Task {
+        await LyricsBench.run()
+        exit(0)
+    }
+    application.run()
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--selftest") {
     // The self test talks to the network and to Spotify, so it runs the main
     // run loop until it finishes.

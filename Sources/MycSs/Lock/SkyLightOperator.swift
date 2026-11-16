@@ -195,7 +195,11 @@ final class SkyLight {
               let all = copySpaces(conn, 0xFFFF)?.takeRetainedValue() as? [NSNumber]
         else { return [] }
 
-        return all.map { ($0.uint64Value, spaceType(conn, $0.uint64Value)) }
+        // The notch's own Space looks like any other Space of type 3. It must never
+        // be taken for the lock screen's, so the lock code does not see it.
+        return all
+            .filter { pinnedSpace == 0 || $0.uint64Value != pinnedSpace }
+            .map { ($0.uint64Value, spaceType(conn, $0.uint64Value)) }
     }
 
     /// The type of a space.
@@ -215,7 +219,9 @@ final class SkyLight {
               let all = copySpaces(conn, 0xFFFF)?.takeRetainedValue() as? [NSNumber]
         else { return "?" }
 
-        return all.map { "\($0.uint64Value):\(spaceType(conn, $0.uint64Value))" }
+        return all
+            .filter { pinnedSpace == 0 || $0.uint64Value != pinnedSpace }
+            .map { "\($0.uint64Value):\(spaceType(conn, $0.uint64Value))" }
             .joined(separator: " ")
     }
 
@@ -460,14 +466,82 @@ final class SkyLight {
     private var currentLockSpace: UInt64 = 0
 
 
-    /// Releases the fallback space, if one was created.
+    // MARK: - A Space of its own, for windows that stay put
+
+    /// The Space of the notch. It belongs to no desktop.
+    private var pinnedSpace: UInt64 = 0
+
+    /// Puts a window in a Space of its own, shown at the highest level, so that
+    /// it stays where it is while the user moves between desktops and full screen
+    /// apps, like the menu bar does.
+    ///
+    /// An ordinary window belongs to the desktop it was opened on, even with
+    /// `.canJoinAllSpaces`; while the desktops slide past, the window slides with
+    /// them for a moment and then jumps back. A window in its own Space, which is
+    /// always shown and is not one of the desktops, is not moved at all. This is
+    /// the structure boring.notch uses for its notch.
+    ///
+    /// The window needs a window number, so it has to be on screen already.
+    /// Returns whether it took, checked with the window server.
+    @discardableResult
+    func pinToAllDesktops(_ window: NSWindow) -> Bool {
+        guard let conn = ensureConnection(),
+              let create = Self.resolve("SLSSpaceCreate", as: SpaceCreateFn.self),
+              let setLevel = Self.resolve("SLSSpaceSetAbsoluteLevel", as: SetAbsoluteLevelFn.self),
+              let showSpaces = Self.resolve("SLSShowSpaces", as: ShowSpacesFn.self),
+              let addWindows = Self.resolve("SLSSpaceAddWindowsAndRemoveFromSpaces", as: AddWindowsFn.self)
+        else {
+            Log.warn("skylight: the notch cannot be pinned (missing symbols)")
+            return false
+        }
+        guard window.windowNumber != 0 else { return false }
+
+        if pinnedSpace == 0 {
+            pinnedSpace = create(conn, 1, nil)
+            guard pinnedSpace != 0 else {
+                Log.warn("skylight: the notch's space could not be created")
+                return false
+            }
+            _ = setLevel(conn, pinnedSpace, Int32.max)
+            _ = showSpaces(conn, [pinnedSpace] as CFArray)
+            Log.line("skylight: space \(pinnedSpace) made for the notch")
+        }
+
+        // Added to the new Space and removed from every other one.
+        addWindows(conn, pinnedSpace, [window.windowNumber] as CFArray, 7)
+        let spaces = spaces(of: window)
+        let pinned = spaces == [pinnedSpace]
+        Log.line("skylight: notch window in spaces \(spaces) (pinned: \(pinned))")
+        return pinned
+    }
+
+    /// The Spaces a window is in, according to the window server.
+    func spaces(of window: NSWindow) -> [UInt64] {
+        guard let conn = ensureConnection(),
+              let copySpacesForWindows = Self.resolve(
+                  "SLSCopySpacesForWindows", as: CopySpacesForWindowsFn.self),
+              let spaces = copySpacesForWindows(
+                  conn, Self.allSpacesMask, [window.windowNumber] as CFArray
+              )?.takeRetainedValue() as? [NSNumber]
+        else { return [] }
+        return spaces.map { $0.uint64Value }
+    }
+
+    /// Releases the fallback space and the notch's, if they were created.
     func teardown() {
-        guard fallbackSpace != 0, let conn = ensureConnection(),
+        guard let conn = ensureConnection(),
               let destroy = Self.resolve("SLSSpaceDestroy", as: SpaceDestroyFn.self)
         else { return }
-        destroy(conn, fallbackSpace)
-        fallbackSpace = 0
-        isActive = false
-        Log.line("skylight: fallback space destroyed")
+        if fallbackSpace != 0 {
+            destroy(conn, fallbackSpace)
+            fallbackSpace = 0
+            isActive = false
+            Log.line("skylight: fallback space destroyed")
+        }
+        if pinnedSpace != 0 {
+            destroy(conn, pinnedSpace)
+            pinnedSpace = 0
+            Log.line("skylight: the notch's space destroyed")
+        }
     }
 }

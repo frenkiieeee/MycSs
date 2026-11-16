@@ -25,6 +25,20 @@ final class LockOverlayPanel: NSPanel {
         didSet { applyCollectionBehaviour() }
     }
 
+    /// Whether the panel is being used as a screensaver on the desktop.
+    ///
+    /// In that mode it covers everything (menu bar and Dock included), appears
+    /// over full screen apps, and swallows the click that dismisses it, so the
+    /// click does not land on whatever is underneath. It still never becomes
+    /// key: dismissing is done by watching the idle time, not the events.
+    var isPresentation = false {
+        didSet {
+            level = isPresentation ? .screenSaver : .floating
+            ignoresMouseEvents = !isPresentation
+            applyCollectionBehaviour()
+        }
+    }
+
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
@@ -51,7 +65,13 @@ final class LockOverlayPanel: NSPanel {
     }
 
     private func applyCollectionBehaviour() {
-        if joinsAllSpaces {
+        if isPresentation {
+            collectionBehavior = [
+                .moveToActiveSpace,
+                .fullScreenAuxiliary,
+                .ignoresCycle,
+            ]
+        } else if joinsAllSpaces {
             collectionBehavior = [
                 .canJoinAllSpaces,
                 .stationary,

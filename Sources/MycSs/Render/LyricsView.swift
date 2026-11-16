@@ -138,27 +138,59 @@ struct LyricsView: View {
     private func lines(_ lyrics: Lyrics) -> some View {
         VStack(alignment: .leading, spacing: LyricsLayout.spacing) {
             ForEach(Array(lyrics.lines.indices), id: \.self) { index in
-                if index == activeIndex {
-                    ActiveLine(
-                        line: lyrics.lines[index],
-                        index: index,
-                        model: model,
-                        inactiveColor: inactiveColor,
-                        effect: effect,
-                        font: font
-                    )
-                } else {
-                    QuietLine(
-                        line: lyrics.lines[index],
-                        index: index,
-                        inactiveColor: inactiveColor,
-                        effect: effect,
-                        font: font
-                    )
+                Group {
+                    if index == activeIndex {
+                        ActiveLine(
+                            line: lyrics.lines[index],
+                            index: index,
+                            model: model,
+                            inactiveColor: inactiveColor,
+                            effect: effect,
+                            font: font
+                        )
+                    } else {
+                        QuietLine(
+                            line: lyrics.lines[index],
+                            index: index,
+                            inactiveColor: inactiveColor,
+                            effect: effect,
+                            font: font
+                        )
+                    }
                 }
+                // The depth is applied *outside* the choice between the active
+                // and the quiet line, so it belongs to the same view when the
+                // song moves on and the change is animated instead of popping.
+                .modifier(LineDepth(
+                    distance: activeIndex.map { abs(index - $0) } ?? 2,
+                    enabled: AppSettings.shared.lyricsDepth
+                ))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Depth
+
+    /// Makes the lines that are far from the active one a little smaller and a
+    /// little out of focus, the way Apple Music does.
+    ///
+    /// Scale and blur are applied after the layout, so they do not change the
+    /// height of a line: the column keeps measuring exactly as before and the
+    /// movement stays a translation.
+    private struct LineDepth: ViewModifier {
+        let distance: Int
+        let enabled: Bool
+
+        func body(content: Content) -> some View {
+            let d = enabled ? distance : 0
+            content
+                .scaleEffect(d == 0 ? 1 : 0.94, anchor: .leading)
+                // The neighbours stay sharp; the blur starts two lines away and
+                // stops growing at three points, so the text stays readable.
+                .blur(radius: d <= 1 ? 0 : min(Double(d - 1) * 0.9, 3))
+                .animation(.smooth(duration: 0.6), value: d)
+        }
     }
 
     // MARK: - Line

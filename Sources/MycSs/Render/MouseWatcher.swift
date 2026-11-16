@@ -38,10 +38,12 @@ final class MouseWatcher {
         guard timer == nil else { return }
         lastPosition = NSEvent.mouseLocation
 
-        let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in
+        // Forty milliseconds: a quick click lasts about eighty, so a slower poll
+        // would lose some of them. Reading the pointer costs nothing.
+        let timer = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.check() }
         }
-        timer.tolerance = 0.05
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }

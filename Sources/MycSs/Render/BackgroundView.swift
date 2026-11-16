@@ -16,12 +16,14 @@ struct BackgroundView: View {
         case gradient
         case glow
         case dark
+        case cover
 
         var title: String {
             switch self {
             case .gradient: return "Gradiente del álbum"
             case .glow: return "Resplandor de color"
             case .dark: return "Negro"
+            case .cover: return "Portada difuminada"
             }
         }
     }
@@ -30,9 +32,21 @@ struct BackgroundView: View {
     var mode: Mode = .gradient
     /// The animation speed multiplier.
     var intensity: Double = 1.0
+    /// The cover, for the blurred-cover background.
+    var artwork: NSImage?
+
+    /// In a settings preview the background moves at a quarter of the rate: the
+    /// preview is a small picture and the window has other things to draw.
+    @Environment(\.isSettingsPreview) private var isPreview
+
+    private func schedule(_ interval: TimeInterval?) -> AnimationTimelineSchedule {
+        .animation(minimumInterval: isPreview ? 1.0 / 10.0 : interval)
+    }
 
     var body: some View {
         switch mode {
+        case .cover:
+            if let artwork { blurredCover(artwork) } else { glow }
         case .gradient:
             gradient
         case .glow:
@@ -42,10 +56,34 @@ struct BackgroundView: View {
         }
     }
 
+    // MARK: - Blurred cover
+
+    /// The cover, very large and out of focus, like Apple Music's background.
+    ///
+    /// The blur is rasterised once (`drawingGroup`) and only the finished picture
+    /// drifts, so the movement costs a transform and not a new blur on every
+    /// frame.
+    private func blurredCover(_ image: NSImage) -> some View {
+        TimelineView(schedule(1.0 / 24.0)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate * max(intensity, 0.05)
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .blur(radius: 70)
+                .saturation(1.55)
+                .drawingGroup()
+                .scaleEffect(1.7 + 0.08 * sin(t / 9))
+                .rotationEffect(.degrees(6 * sin(t / 23)))
+                .offset(x: 40 * sin(t / 13), y: 30 * cos(t / 17))
+                .overlay(Color.black.opacity(0.42))
+                .clipped()
+        }
+    }
+
     // MARK: - Gradient
 
     private var gradient: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(schedule(nil)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             // One full turn every 40 seconds, scaled by the intensity.
             let angle = time * (2 * .pi / 40) * max(intensity, 0.1)
@@ -84,7 +122,7 @@ struct BackgroundView: View {
     // MARK: - Glow
 
     private var glow: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(schedule(nil)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
 
             ZStack {
@@ -152,5 +190,17 @@ struct BackgroundView: View {
                 .blur(radius: 60)
                 .blendMode(.plusLighter)
         }
+    }
+}
+
+private struct SettingsPreviewKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the view is drawn inside a settings preview.
+    var isSettingsPreview: Bool {
+        get { self[SettingsPreviewKey.self] }
+        set { self[SettingsPreviewKey.self] = newValue }
     }
 }

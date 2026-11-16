@@ -14,6 +14,25 @@ final class LockOverlayController {
     private let lockState: LockState
     private let model = LyricsViewModel()
 
+    /// The model the notch shares with the overlay.
+    var sharedModel: LyricsViewModel { model }
+
+    /// Whether the lock screen, the screensaver or the preview is on screen.
+    ///
+    /// **It is a flag, not `NSWindow.isVisible`.** The lock panels are moved into
+    /// every new system Space (the volume indicator, the screenshot tool and
+    /// others create one) and "presented again" there, which leaves the window
+    /// marked as visible while nothing is on screen. Asking the window made the
+    /// notch hide itself every time the volume changed or a screenshot was taken.
+    var isOverlayVisible: Bool {
+        overlayShown || isPresenting
+    }
+
+    /// Set only by `show`, `showPreviewWindow` and `hide`.
+    private var overlayShown = false
+
+    var isScreenLocked: Bool { lockState.isLocked }
+
     /// True while the overlay is waiting for the lock screen's Space.
     private var waitingForLockScreen = false
 
@@ -31,6 +50,24 @@ final class LockOverlayController {
 
     init(lockState: LockState) {
         self.lockState = lockState
+        model.onDismissRequest = { [weak self] in
+            self?.dismissFromOverlay()
+        }
+    }
+
+    /// Whether the user closed the overlay on this lock, to see the real lock
+    /// screen. It stays closed until the next lock.
+    private var dismissedWhileLocked = false
+
+    /// Escape, or a click outside the lyrics.
+    private func dismissFromOverlay() {
+        if isPresenting {
+            hidePresentation()
+        } else if lockState.isLocked, !dismissedWhileLocked {
+            Log.line("overlay: closed by the user on the lock screen")
+            dismissedWhileLocked = true
+            hide()
+        }
     }
 
     /// Starts the continuous Spotify polling.
@@ -74,6 +111,9 @@ final class LockOverlayController {
 
     private func handleLockChange(_ locked: Bool) {
         if locked {
+            // The lock takes over from the screensaver.
+            hidePresentation()
+            dismissedWhileLocked = false
             // Show the overlay immediately rather than waiting for the next
             // tick: the lock notification is the earliest signal there is, and
             // every millisecond of delay is visible on screen.
@@ -129,6 +169,7 @@ final class LockOverlayController {
     /// moved again as soon as the real one appears.
     func tick() {
         followLockScreen()
+        presentationTick()
     }
 
     /// Moves the overlay again if the lock screen has created a newer Space.
@@ -137,7 +178,7 @@ final class LockOverlayController {
     /// notification, so the overlay is placed in the newest known lock Space and
     /// then moved again as soon as the real one appears.
     func followLockScreen() {
-        guard !isPreview else { return }
+        guard !isPreview, !dismissedWhileLocked else { return }
 
         var moved = false
         for panel in panels.values {
@@ -184,6 +225,115 @@ final class LockOverlayController {
         Log.line("overlay: hint forced for the snapshot")
     }
 
+    // MARK: - Screensaver
+
+    /// Whether the lyrics are on screen as a screensaver.
+    private(set) var isPresenting = false
+    private var presentedAt: Date?
+    private var lastIdleCheck: Date = .distantPast
+    private var idleCheckInFlight = false
+
+    /// How long after showing the screensaver an input event is ignored, so the
+    /// key press that opened it does not close it again.
+    private let presentationGrace: TimeInterval = 1.2
+
+    func togglePresentation() {
+        if isPresenting { hidePresentation() } else { showPresentation() }
+    }
+
+    /// Whether the screensaver opened by itself after the idle time. Only then
+    /// does any key or movement close it, like a real screensaver; when it was
+    /// opened on purpose, the mouse has to be free to use the player controls.
+    private var presentedByIdle = false
+
+    /// The panels of the screensaver. They are **not** the panels of the lock
+    /// screen: those are moved into the lock screen's Space with private calls,
+    /// and a window that has been through a different level, a different Space
+    /// behaviour and a different mouse behaviour does not always come back from
+    /// it. After using the screensaver, the lock screen stopped showing the
+    /// overlay. So the lock panels are never touched, and these are made when the
+    /// screensaver opens and thrown away when it closes.
+    private var presentationPanels: [CGDirectDisplayID: LockOverlayPanel] = [:]
+
+    /// Shows the lyrics over the desktop, like a screensaver.
+    ///
+    /// It uses the same view as the lock screen, in a window that covers
+    /// everything. It does not read the keyboard beyond Escape.
+    func showPresentation(byIdle: Bool = false) {
+        guard !lockState.isLocked, !isPresenting else { return }
+        isPresenting = true
+        presentedByIdle = byIdle
+        presentedAt = Date()
+
+        for screen in NSScreen.screens {
+            guard let id = screen.displayID else { continue }
+            let panel = makePanel(displayID: id)
+            panel.joinsAllSpaces = false
+            panel.isPresentation = true
+            panel.setFrame(screen.frame, display: true)
+            panel.orderFrontRegardless()
+            presentationPanels[id] = panel
+        }
+        Log.line("overlay: screensaver shown on \(presentationPanels.count) display(s)")
+        // No password to type here, so the keyboard is not watched.
+        model.start(mode: .presentation)
+        model.setVisible(true)
+        DisplayPower.apply(AppSettings.shared.powerMode)
+    }
+
+    func hidePresentation() {
+        guard isPresenting else { return }
+        isPresenting = false
+        presentedAt = nil
+        for panel in presentationPanels.values { panel.orderOut(nil) }
+        presentationPanels.removeAll()
+        model.stop()
+        model.setVisible(false)
+        DisplayPower.release()
+        Log.line("overlay: screensaver closed")
+    }
+
+    /// Seconds since the last key press, click or mouse movement.
+    static func idleSeconds() -> TimeInterval {
+        CGEventSource.secondsSinceLastEventType(
+            .combinedSessionState,
+            eventType: CGEventType(rawValue: ~0)!
+        )
+    }
+
+    /// Closes the screensaver when the user is back, and opens it after the
+    /// configured idle time.
+    private func presentationTick() {
+        let now = Date()
+
+        if isPresenting {
+            guard presentedByIdle,
+                  let presentedAt, now.timeIntervalSince(presentedAt) > presentationGrace
+            else { return }
+            if Self.idleSeconds() < 0.3 { hidePresentation() }
+            return
+        }
+
+        // The idle check runs about once a second, not on every tick.
+        guard now.timeIntervalSince(lastIdleCheck) > 1 else { return }
+        lastIdleCheck = now
+
+        let minutes = AppSettings.shared.idleMinutes
+        let threshold = Double(minutes) * 60
+        guard minutes > 0, !idleCheckInFlight, !lockState.isLocked,
+              !overlayShown,
+              Self.idleSeconds() >= threshold
+        else { return }
+
+        idleCheckInFlight = true
+        Task { [weak self] in
+            guard let self else { return }
+            let playing = await self.model.isMusicPlaying()
+            self.idleCheckInFlight = false
+            if playing, Self.idleSeconds() >= threshold { self.showPresentation(byIdle: true) }
+        }
+    }
+
     // MARK: - Panels
 
     private func rebuild() {
@@ -197,13 +347,13 @@ final class LockOverlayController {
         }
 
         for (id, screen) in wanted {
-            let panel = panels[id] ?? makePanel()
+            let panel = panels[id] ?? makePanel(displayID: id)
             panels[id] = panel
             panel.setFrame(screen.frame, display: true)
         }
     }
 
-    private func makePanel() -> LockOverlayPanel {
+    private func makePanel(displayID: CGDirectDisplayID) -> LockOverlayPanel {
         let frame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let panel = LockOverlayPanel(
             contentRect: frame,
@@ -211,7 +361,7 @@ final class LockOverlayController {
             backing: .buffered,
             defer: false
         )
-        let host = NSHostingView(rootView: OverlayRootView(model: model))
+        let host = NSHostingView(rootView: OverlayRootView(model: model, displayID: displayID))
         // The hosting view is created with a zero frame. Without an explicit one
         // it stays zero-sized and the panel renders nothing at all — the window is
         // on screen but its content is invisible.
@@ -227,6 +377,7 @@ final class LockOverlayController {
     private var isPreview = false
 
     private func show() {
+        overlayShown = true
         isPreview = false
         rebuild()
         let shown = Date()
@@ -245,8 +396,9 @@ final class LockOverlayController {
             format: "overlay: shown on %d display(s) in %.0f ms",
             panels.count, shown.timeIntervalSince(lockedAt ?? shown) * 1000
         ))
-        model.start()
+        model.start(mode: .lock)
         model.setVisible(true)
+        Log.line("overlay: lock screen content: track '\(model.track.title)', \(model.lyrics?.lines.count ?? 0) lyric lines, lyrics not found: \(model.lyricsNotFound)")
         // Keep the display awake so the lyrics stay visible.
         DisplayPower.apply(AppSettings.shared.powerMode)
     }
@@ -259,6 +411,7 @@ final class LockOverlayController {
     /// along with it. The preview is for looking at the layout on the desktop, so
     /// it stays a plain window.
     private func showPreviewWindow() {
+        overlayShown = true
         isPreview = true
         rebuild()
         for panel in panels.values {
@@ -266,11 +419,12 @@ final class LockOverlayController {
             panel.orderFrontRegardless()
         }
         Log.line("overlay: preview shown on \(panels.count) display(s)")
-        model.start()
+        model.start(mode: .preview)
         model.setVisible(true)
     }
 
     private func hide() {
+        overlayShown = false
         for panel in panels.values {
             panel.orderOut(nil)
         }
@@ -291,7 +445,11 @@ final class LockOverlayController {
     /// rendered from the view itself instead, which produces the same pixels
     /// without needing Screen Recording permission.
     func snapshot(to path: String) {
-        let data = captureWindow() ?? captureView()
+        // `MYCSS_SNAPSHOT=view` skips the window capture: on recent macOS the
+        // window capture comes out as a white image, which is not blank, so
+        // the fallback never kicks in.
+        let viewOnly = ProcessInfo.processInfo.environment["MYCSS_SNAPSHOT"] == "view"
+        let data = (viewOnly ? nil : captureWindow()) ?? captureView()
 
         guard let data else {
             Log.error("snapshot: the image could not be rendered")
@@ -311,7 +469,7 @@ final class LockOverlayController {
     /// Returns nil when the window is not being drawn, which is what happens
     /// when it belongs to another Space.
     private func captureWindow() -> Data? {
-        guard let panel = panels.values.first,
+        guard let panel = presentationPanels.values.first ?? panels.values.first,
               let view = panel.contentView,
               let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds)
         else { return nil }
@@ -330,7 +488,12 @@ final class LockOverlayController {
             ?? NSScreen.main?.frame.size
             ?? CGSize(width: 1440, height: 900)
 
-        let renderer = ImageRenderer(content: OverlayRootView(model: model))
+        // A dark base: the view is mostly white text, which cannot be seen on the
+        // transparent background of an image.
+        let renderer = ImageRenderer(content: ZStack {
+            Color(red: 0.07, green: 0.07, blue: 0.1)
+            OverlayRootView(model: model)
+        })
         renderer.proposedSize = ProposedViewSize(size)
         renderer.scale = 2
 

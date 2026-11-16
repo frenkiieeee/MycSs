@@ -8,6 +8,13 @@ import Foundation
 @MainActor
 final class ThemeEngine {
 
+    /// Where the artwork URL comes from.
+    private let source: any PlayerSource
+
+    init(source: any PlayerSource) {
+        self.source = source
+    }
+
     /// The theme currently in effect.
     private(set) var theme: Theme = .default
 
@@ -65,38 +72,46 @@ final class ThemeEngine {
         artworkTask?.cancel()
         artwork = nil
 
-        guard track.source == .spotify, track.hasTrack else { return }
+        guard track.hasTrack else { return }
 
-        let urlString = NowPlayingReader.artworkURL()
-        guard let urlString, let url = URL(string: urlString) else {
-            Log.line("theme: no artwork url for '\(track.title)'")
+        let source = self.source
+        let previous = lastArtworkURL
+        artworkTask = Task { [weak self] in
+            // The player is asked off the main thread (some answer with whole
+            // images), and the rest of the search goes to `CoverProvider`.
+            let found = await CoverProvider.shared.cover(for: track, previousURL: previous) {
+                let url = source.artworkURL()
+                return (url, url == nil ? source.artworkData() : nil)
+            }
+            guard !Task.isCancelled else { return }
+            guard let found else {
+                Log.line("theme: no cover found for '\(track.title)'")
+                return
+            }
+            Log.line("theme: cover for '\(track.title)' from \(found.origin.rawValue)")
+            await MainActor.run {
+                self?.lastArtworkURL = found.url
+                self?.apply(artwork: found.image)
+            }
+        }
+    }
+
+    /// The artwork URL the player gave last, to notice a stale one.
+    private var lastArtworkURL: String?
+
+    private func apply(artwork image: NSImage) {
+        artwork = image
+        // The artwork drives the theme, but the user can turn that off: in
+        // that case the fixed accent colour is used.
+        guard AppSettings.shared.useArtworkColours else {
+            transition(to: Theme.fixed)
             return
         }
-
-        artworkTask = Task { [weak self] in
-            do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-                      let image = NSImage(data: data)
-                else { return }
-                await MainActor.run {
-                    self?.artwork = image
-                    // The artwork drives the theme, but the user can turn that
-                    // off: in that case the fixed accent colour is used.
-                    guard AppSettings.shared.useArtworkColours else {
-                        self?.transition(to: Theme.fixed)
-                        return
-                    }
-                    // The artwork of a monochrome cover falls back to the default.
-                    if let theme = ArtworkPalette.theme(from: image) {
-                        self?.transition(to: theme)
-                    } else {
-                        self?.transition(to: .default)
-                    }
-                }
-            } catch {
-                Log.line("theme: artwork download failed (\(error.localizedDescription))")
-            }
+        // The artwork of a monochrome cover falls back to the default.
+        if let theme = ArtworkPalette.theme(from: image) {
+            transition(to: theme)
+        } else {
+            transition(to: .default)
         }
     }
 }

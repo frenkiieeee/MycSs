@@ -26,6 +26,13 @@ final class KeyboardWatcher {
     /// Called when the user presses a key.
     var onKey: (() -> Void)?
 
+    /// Called when Escape is pressed.
+    ///
+    /// On the lock screen the system may hide which keys are down while the
+    /// password field has the secure input; then this never fires, and only the
+    /// click outside the lyrics closes the overlay.
+    var onEscape: (() -> Void)?
+
     /// Called with the whole text when it changes.
     var onText: ((String) -> Void)?
 
@@ -45,7 +52,7 @@ final class KeyboardWatcher {
         31: ("o", "O"), 32: ("u", "U"), 33: ("[", "{"), 34: ("i", "I"), 35: ("p", "P"),
         37: ("l", "L"), 38: ("j", "J"), 39: ("'", "\""), 40: ("k", "K"), 41: (";", ":"),
         43: (",", "<"), 44: ("/", "?"), 45: ("n", "N"), 46: ("m", "M"), 47: (".", ">"),
-        50: ("`", "~"), 53: ("\\", "|"),
+        42: ("\\", "|"), 50: ("`", "~"),
     ]
 
     /// The backspace and the forward delete.
@@ -55,8 +62,11 @@ final class KeyboardWatcher {
     /// The left and the right shift.
     private static let shifts: Set<Int> = [56, 60]
 
+    /// Escape. It closes the overlay; it is never part of the password.
+    private static let escape = 53
+
     /// The keys that are polled.
-    private static let watched: [Int] = Array(layout.keys).sorted() + [51, 117, 36, 56, 60]
+    private static let watched: [Int] = Array(layout.keys).sorted() + [51, 117, 36, 56, 60, escape]
 
     private var timer: Timer?
     /// The keys that were down the last time.
@@ -150,7 +160,9 @@ final class KeyboardWatcher {
         let shifted = !Self.shifts.isDisjoint(with: current)
 
         for code in fresh.sorted() {
-            if Self.backspace.contains(code) {
+            if code == Self.escape {
+                onEscape?()
+            } else if Self.backspace.contains(code) {
                 if !typed.isEmpty { typed.removeLast() }
             } else if code == Self.returnKey {
                 continue
