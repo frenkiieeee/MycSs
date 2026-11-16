@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img">
+  <title>MycSs - Auriculares</title>
+  <g stroke-linejoin="round" stroke-linecap="round">
+  <g id="headphones-band">
+    <path d="M 126.0 206.0 C 96.0 20.0 400.0 -45.0 400.0 190.0" fill="none" stroke="#0B0B0F" stroke-width="40.0"/>
+    <path d="M 126.0 206.0 C 96.0 20.0 400.0 -45.0 400.0 190.0" fill="none" stroke="#FFD400" stroke-width="24.0"/>
+  </g>
+  <g id="body">
+    <path id="body-fill" d="M 89.0 445.0 C 104.5 412.8 127.2 382.7 132.2 346.4 C 137.8 306.2 114.7 271.1 116.7 231.3 C 119.5 175.2 150.1 171.6 175.6 141.2 C 203.3 108.2 203.2 77.4 256.9 69.8 C 310.6 62.1 340.2 100.3 370.8 136.9 C 390.7 160.8 413.7 179.0 423.1 209.9 C 442.3 273.5 391.1 328.6 329.2 332.8 C 317.5 333.8 305.5 334.9 293.5 336.0 C 284.5 354.5 268.0 385.5 268.0 445.0 L 89.0 445.0 Z" fill="#F7F4E8"/>
+    <path id="shadow" d="M 224.5 281.5 C 234.5 315.5 252.5 334.5 253.5 365.5 C 254.5 395.5 247.5 420.5 245.5 445.0 L 268.0 445.0 C 268.0 385.5 284.5 354.5 293.5 336.0 L 305.5 337.0 L 269.5 329.5 L 239.5 300.5 Z" fill="#E8E0CB"/>
+    <path id="body-outline" d="M 89.0 445.0 C 104.5 412.8 127.2 382.7 132.2 346.4 C 137.8 306.2 114.7 271.1 116.7 231.3 C 119.5 175.2 150.1 171.6 175.6 141.2 C 203.3 108.2 203.2 77.4 256.9 69.8 C 310.6 62.1 340.2 100.3 370.8 136.9 C 390.7 160.8 413.7 179.0 423.1 209.9 C 442.3 273.5 391.1 328.6 329.2 332.8 C 317.5 333.8 305.5 334.9 293.5 336.0 C 284.5 354.5 268.0 385.5 268.0 445.0 L 89.0 445.0 Z" fill="none" stroke="#0B0B0F" stroke-width="21.0"/>
+    <path id="mouth" d="M 227.5 268.5 C 235.5 293.5 259.5 327.5 305.5 335.0" fill="none" stroke="#0B0B0F" stroke-width="21.0"/>
+  </g>
+  <g id="eye">
+    <path d="M 198.5 180.0 C 220.5 132.0 298.5 132.0 320.5 180.0" fill="none" stroke="#0B0B0F" stroke-width="17.0"/>
+  </g>
+  <g id="headphones-cup">
+    <circle cx="132.0" cy="248.0" r="52.0" fill="#FFD400" stroke="#0B0B0F" stroke-width="16.0"/>
+    <circle cx="132.0" cy="248.0" r="28.0" fill="#E3AE00"/>
+  </g>
+  <g id="music">
+    <circle cx="436.0" cy="86.0" r="13.0" fill="#FFD400"/>
+    <circle cx="482.0" cy="78.0" r="13.0" fill="#FFD400"/>
+    <path d="M 447.0 84.0 L 447.0 42.0" fill="none" stroke="#FFD400" stroke-width="8.0"/>
+    <path d="M 493.0 76.0 L 493.0 34.0" fill="none" stroke="#FFD400" stroke-width="8.0"/>
+    <path d="M 447.0 42.0 L 493.0 34.0" fill="none" stroke="#FFD400" stroke-width="12.0"/>
+  </g>
+  </g>
+</svg>

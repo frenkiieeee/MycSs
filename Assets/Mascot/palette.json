@@ -1,0 +1,12 @@
+{
+  "primary": "#FFD400",
+  "background": "#0B0B0F",
+  "surface": "#1A1A22",
+  "mascot": "#F7F4E8",
+  "border": "#3A3A46",
+  "derived": {
+    "shade": "#E8E0CB",
+    "yellowDark": "#E3AE00",
+    "silver": "#CBCBD8"
+  }
+}

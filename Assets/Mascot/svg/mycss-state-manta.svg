@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img">
+  <title>MycSs - Manta</title>
+  <g stroke-linejoin="round" stroke-linecap="round">
+  <g id="blanket-back">
+    <path d="M 40.0 470.0 C 38.0 390.0 96.0 346.0 140.0 318.0 C 118.0 188.0 190.0 74.0 316.0 64.0 C 430.0 56.0 486.0 150.0 478.0 286.0 C 474.0 380.0 482.0 430.0 484.0 470.0 Z" fill="#FFD400" stroke="#0B0B0F" stroke-width="22.0"/>
+    <path d="M 160.0 300.0 C 170.0 210.0 220.0 120.0 300.0 100.0" fill="none" stroke="#E3AE00" stroke-width="10.0"/>
+  </g>
+  <g id="face">
+    <path d="M 196.0 274.0 C 188.0 196.0 250.0 152.0 318.0 160.0 C 388.0 168.0 410.0 230.0 398.0 290.0 C 388.0 340.0 304.0 354.0 250.0 336.0 C 214.0 324.0 200.0 302.0 196.0 274.0 Z" fill="#F7F4E8" stroke="#0B0B0F" stroke-width="16.0"/>
+      <g id="eye">
+    <path d="M 292.0 226.0 C 306.0 258.0 354.0 258.0 368.0 226.0" fill="none" stroke="#0B0B0F" stroke-width="12.0"/>
+  </g>
+  </g>
+  <g id="blanket-front">
+    <path d="M 40.0 470.0 C 74.0 392.0 170.0 350.0 270.0 366.0 C 360.0 380.0 440.0 372.0 484.0 334.0 L 484.0 470.0 Z" fill="#FFD400" stroke="#0B0B0F" stroke-width="22.0"/>
+    <path d="M 70.0 440.0 C 110.0 408.0 160.0 400.0 210.0 410.0" fill="none" stroke="#E3AE00" stroke-width="10.0"/>
+    <path d="M 300.0 410.0 C 360.0 420.0 420.0 410.0 462.0 380.0" fill="none" stroke="#E3AE00" stroke-width="10.0"/>
+  </g>
+  </g>
+</svg>

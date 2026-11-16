@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img">
+  <title>MycSs - Asomando</title>
+  <g stroke-linejoin="round" stroke-linecap="round">
+  <g id="body">
+    <path d="M 72.0 440.0 C 72.0 330.0 128.0 236.0 220.0 208.0 C 264.0 194.0 324.0 204.0 364.0 246.0 C 412.0 294.0 440.0 366.0 440.0 440.0 Z" fill="#F7F4E8"/>
+    <path d="M 72.0 440.0 C 72.0 330.0 128.0 236.0 220.0 208.0 C 264.0 194.0 324.0 204.0 364.0 246.0 C 412.0 294.0 440.0 366.0 440.0 440.0" fill="none" stroke="#0B0B0F" stroke-width="22.0"/>
+    <path d="M 34.0 444.0 L 478.0 444.0" fill="none" stroke="#FFD400" stroke-width="10.0"/>
+  </g>
+  <g id="eye">
+    <circle cx="236.0" cy="312.0" r="50.0" fill="#0B0B0F"/>
+    <circle id="glint" cx="253.0" cy="290.0" r="17.0" fill="#FFFFFF"/>
+  </g>
+  <g id="hands">
+    <path d="M 96.0 442.0 A 52.0 30.0 0 1 1 200.0 442.0 A 52.0 30.0 0 1 1 96.0 442.0 Z" fill="#F7F4E8" stroke="#0B0B0F" stroke-width="16.0"/>
+    <path d="M 312.0 442.0 A 52.0 30.0 0 1 1 416.0 442.0 A 52.0 30.0 0 1 1 312.0 442.0 Z" fill="#F7F4E8" stroke="#0B0B0F" stroke-width="16.0"/>
+  </g>
+  <g id="extras">
+    <path d="M 372.0 100.0 L 388.0 142.0" fill="none" stroke="#FFD400" stroke-width="20.0"/>
+    <path d="M 410.0 148.0 L 452.0 164.0" fill="none" stroke="#FFD400" stroke-width="20.0"/>
+  </g>
+  </g>
+</svg>
