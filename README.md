@@ -202,6 +202,10 @@ ajustes:
   El calendario se lee con EventKit y el permiso se pide la primera vez; en el
   binario de `swift build`, que no tiene `Info.plist`, queda desactivado porque
   EventKit cerraría la app.
+  **Pulsar la fecha** del calendario (mes y año, con un «+») abre una ventana pequeña bajo
+  el notch para crear un **evento** o un **recordatorio** en ese día: título, hora, duración
+  o todo el día; Intro crea y Esc cancela (spec 009). Se guarda en el calendario y la lista
+  por defecto de la Mac.
   Los **recordatorios** se tachan con un clic; el **temporizador** (5, 10, 25, 45 min)
   sigue corriendo con el notch cerrado y ensancha su lado derecho con la cuenta atrás;
   **batería y sistema** muestra batería, CPU y memoria; el **portapapeles** guarda lo

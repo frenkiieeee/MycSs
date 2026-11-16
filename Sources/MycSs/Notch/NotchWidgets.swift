@@ -77,15 +77,25 @@ private struct WidgetHeader: View {
         switch current {
         case .calendar:
             let selected = AgendaModel.date(forOffset: services.agenda.selectedOffset)
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(selected.formatted(.dateTime.month(.abbreviated)))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                Text(selected.formatted(.dateTime.year()))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .contentTransition(.numericText())
+            // Pressing the date writes a new event or reminder for that day.
+            Button {
+                QuickAddController.shared.present(day: selected, services: services)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(selected.formatted(.dateTime.month(.abbreviated)))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(selected.formatted(.dateTime.year()))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .contentTransition(.numericText())
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(brandYellow.opacity(0.85))
+                }
             }
+            .buttonStyle(NotchPress(scale: 0.94))
+            .probe("calendarTitle")
             .animation(NotchMotion.swap, value: services.agenda.selectedOffset)
         default:
             Text(current.title)

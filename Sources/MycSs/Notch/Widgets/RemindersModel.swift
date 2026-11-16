@@ -142,6 +142,33 @@ final class RemindersModel {
         }
     }
 
+    /// Saves a new reminder in the list the Mac uses by default. Returns what went
+    /// wrong, or nil when it was saved.
+    func createReminder(title: String, due: Date, withTime: Bool) -> String? {
+        if isDemo {
+            items.append(ReminderItem(id: UUID().uuidString, title: title, due: due, color: .systemPurple))
+            return nil
+        }
+        guard access == .granted else { return "Falta el permiso de recordatorios" }
+        let store = self.store ?? EKEventStore()
+        self.store = store
+        guard let list = store.defaultCalendarForNewReminders() else { return "No hay una lista por defecto" }
+        let reminder = EKReminder(eventStore: store)
+        reminder.calendar = list
+        reminder.title = title
+        let parts: Set<Calendar.Component> = withTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day]
+        reminder.dueDateComponents = Calendar.current.dateComponents(parts, from: due)
+        do {
+            try store.save(reminder, commit: true)
+        } catch {
+            Log.warn("reminders: could not save '\(title)': \(error.localizedDescription)")
+            return error.localizedDescription
+        }
+        Log.line("reminders: created '\(title)'")
+        refresh(force: true)
+        return nil
+    }
+
     private func startObserving() {
         guard observer == nil, let store else { return }
         observer = NotificationCenter.default.addObserver(

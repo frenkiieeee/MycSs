@@ -21,6 +21,7 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 4 | Notch: música, widgets, bandeja, HUD, notificaciones, tamaño y estilos, vistas previas (pendiente de probar con los permisos reales) | [005](specs/005-notch.md), [006](specs/006-notifications.md) |
 | 1b | Reproductor, salir con Esc o clic, portada centrada | [007](specs/007-player-controls.md) |
 | 1c | Cambio de canción animado, con y sin letra | [008](specs/008-song-transition.md) |
+| 4b | Crear eventos y recordatorios desde el notch | [009](specs/009-quick-add.md) |
 | 5 | Firma, icono, onboarding | pendiente |
 
 ## Cómo usarlos con agentes

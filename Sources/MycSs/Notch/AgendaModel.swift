@@ -181,6 +181,38 @@ final class AgendaModel {
             }
     }
 
+    /// Saves a new event in the calendar the Mac uses by default. Returns what went
+    /// wrong, or nil when it was saved.
+    func createEvent(title: String, start: Date, end: Date, allDay: Bool) -> String? {
+        if isDemo {
+            events.append(AgendaEvent(
+                id: UUID().uuidString, title: title, start: start, end: end,
+                isAllDay: allDay, color: .systemPurple, calendar: "Demo"
+            ))
+            events.sort { $0.start < $1.start }
+            return nil
+        }
+        guard access == .granted else { return "Falta el permiso del calendario" }
+        let store = self.store ?? EKEventStore()
+        self.store = store
+        guard let calendar = store.defaultCalendarForNewEvents else { return "No hay un calendario por defecto" }
+        let event = EKEvent(eventStore: store)
+        event.calendar = calendar
+        event.title = title
+        event.isAllDay = allDay
+        event.startDate = start
+        event.endDate = allDay ? start : max(end, start.addingTimeInterval(60))
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+        } catch {
+            Log.warn("calendar: could not save '\(title)': \(error.localizedDescription)")
+            return error.localizedDescription
+        }
+        Log.line("calendar: created '\(title)'")
+        refresh(force: true)
+        return nil
+    }
+
     private func startObserving() {
         guard observer == nil, let store else { return }
         observer = NotificationCenter.default.addObserver(

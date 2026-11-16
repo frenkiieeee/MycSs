@@ -518,6 +518,26 @@ final class NotchController {
             agenda.select(0)
             await pause(0.3)
 
+            // Pressing the date opens the window that creates an event or a reminder.
+            await click("calendarTitle", in: panel)
+            await pause(0.4)
+            check("pressing the date opens the quick add window", QuickAddController.shared.isShown)
+            let quick = QuickAddController.shared.model
+            quick.kind = .event
+            quick.title = "Prueba de evento"
+            QuickAddController.shared.save()
+            check("an event is created for that day",
+                  agenda.eventsForSelectedDay.contains { $0.title == "Prueba de evento" } || agenda.events.contains { $0.title == "Prueba de evento" })
+            check("the window closes after saving", !QuickAddController.shared.isShown)
+            QuickAddController.shared.present(day: Date(), services: services)
+            quick.kind = .reminder
+            quick.title = "Prueba de recordatorio"
+            check("an empty title is refused", { quick.title = ""; return !quick.save(agenda: agenda, reminders: services.reminders) }())
+            quick.title = "Prueba de recordatorio"
+            QuickAddController.shared.save()
+            check("a reminder is created", services.reminders.items.contains { $0.title == "Prueba de recordatorio" })
+            QuickAddController.shared.close()
+
             // The tabs.
             await click("tab.shelf", in: panel)
             await pause(0.5)
