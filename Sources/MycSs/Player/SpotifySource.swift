@@ -37,7 +37,10 @@ import Foundation
 ///    position to 0 and freeze the karaoke. The comma is replaced before parsing.
 /// 3. `spotify url of t` cannot be assigned to a variable (-10003, "access not
 ///    allowed"), so it has to be read inline in the returned list.
-enum NowPlayingReader {
+struct SpotifySource: PlayerSource {
+
+    let id: NowPlaying.Source = .spotify
+
 
     /// The fast script: position, playing state and the track title.
     ///
@@ -80,16 +83,6 @@ enum NowPlayingReader {
     end if
     """
 
-    /// A fast reading.
-    struct FastSnapshot {
-        var isPlaying: Bool
-        var positionSec: TimeInterval
-        /// The title of the track, used to detect a change.
-        var title: String
-        var latency: TimeInterval
-        var takenAt: Date
-    }
-
     /// The queue the Apple Event runs on.
     ///
     /// It is a serial queue of its own so that two readings never overlap and
@@ -108,10 +101,10 @@ enum NowPlayingReader {
     /// Reads the position, off the main thread.
     ///
     /// - Parameter completion: called with the result, on the reading queue.
-    static func readPosition(completion: @escaping (FastSnapshot) -> Void) {
-        queue.async {
+    func readPosition(completion: @escaping (PlayerSnapshot) -> Void) {
+        Self.queue.async {
             let started = Date()
-            let (isPlaying, position, title) = runPosition()
+            let (isPlaying, position, title) = Self.runPosition()
             let latency = Date().timeIntervalSince(started)
 
             // The position is sampled somewhere along the round trip, so it is
@@ -123,7 +116,7 @@ enum NowPlayingReader {
                 adjusted += latency * 0.5
             }
 
-            completion(FastSnapshot(
+            completion(PlayerSnapshot(
                 isPlaying: isPlaying,
                 positionSec: adjusted,
                 title: title,
@@ -138,24 +131,16 @@ enum NowPlayingReader {
     /// Reads the rest of the track's metadata, off the main thread.
     ///
     /// - Parameter completion: called with the result, on the reading queue.
-    static func readTrack(completion: @escaping (TrackMetadata) -> Void) {
-        queue.async {
-            let (artist, album, duration, url) = runTrack()
-            completion(TrackMetadata(
+    func readTrack(completion: @escaping (PlayerTrackMetadata) -> Void) {
+        Self.queue.async {
+            let (artist, album, duration, url) = Self.runTrack()
+            completion(PlayerTrackMetadata(
                 artist: artist,
                 album: album,
                 durationSec: duration,
-                spotifyURL: url.isEmpty ? nil : url
+                trackURL: url.isEmpty ? nil : url
             ))
         }
-    }
-
-    /// The metadata that is expensive to read.
-    struct TrackMetadata {
-        var artist: String
-        var album: String
-        var durationSec: Double
-        var spotifyURL: String?
     }
 
     // MARK: - Script execution
@@ -216,13 +201,22 @@ enum NowPlayingReader {
     /// The artwork URL for the current track.
     ///
     /// Read separately because it is only needed once per track.
-    static func artworkURL() -> String? {
-        guard let script = compiledArtworkScript else { return nil }
-        var error: NSDictionary?
-        let output = script.executeAndReturnError(&error)
-        guard error == nil else { return nil }
-        guard let value = output.stringValue, !value.isEmpty else { return nil }
-        return value
+    func send(_ command: PlayerCommand) {
+        AppleScriptValue.run(command, app: "Spotify", on: Self.queue)
+    }
+
+    func artworkURL() -> String? {
+        // On the player's own queue, so it never overlaps another Apple Event.
+        // Callers are never on that queue (they are the main thread or a
+        // detached task), so `sync` cannot deadlock.
+        Self.queue.sync {
+            guard let script = Self.compiledArtworkScript else { return nil }
+            var error: NSDictionary?
+            let output = script.executeAndReturnError(&error)
+            guard error == nil else { return nil }
+            guard let value = output.stringValue, !value.isEmpty else { return nil }
+            return value
+        }
     }
 
     private static let artworkScript = """

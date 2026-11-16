@@ -20,7 +20,14 @@ import Foundation
 /// jump larger than a threshold means the track was seeked.
 actor SyncEngine {
 
-    /// How often the position is sampled from Spotify.
+    /// The player being read. Spotify today; any `PlayerSource` works.
+    private let source: any PlayerSource
+
+    init(source: any PlayerSource) {
+        self.source = source
+    }
+
+    /// How often the position is sampled from the player.
     private let pollInterval: TimeInterval = 0.2
 
     /// Position differences larger than this are treated as a seek rather than
@@ -50,6 +57,17 @@ actor SyncEngine {
 
     /// The track currently playing.
     var current: NowPlaying { nowPlaying }
+
+    /// True once every source has answered and none had lyrics for the track.
+    ///
+    /// The overlay uses it to move the cover to the middle of the screen.
+    private(set) var lyricsNotFound = false
+
+    /// The task that fetches the lyrics of the current track.
+    private var lyricsTask: Task<Void, Never>?
+
+    /// Whether a track is loaded and the player is moving.
+    var isPlaying: Bool { !isPaused && nowPlaying.hasTrack }
 
     /// The lyrics for the current track, if they have loaded.
     var currentLyrics: Lyrics? { lyrics }
@@ -103,6 +121,52 @@ actor SyncEngine {
         }
     }
 
+    // MARK: - Commands
+
+    /// Sends a command to the player and updates the picture straight away.
+    ///
+    /// The player takes a moment to answer, and the poll is five times a second
+    /// at best, so waiting for it would make every button feel dead. The
+    /// position is moved at once, and the next poll corrects it if the player
+    /// disagrees.
+    func perform(_ command: PlayerCommand) {
+        switch command {
+        case .playPause:
+            if isPaused {
+                anchorDate = Date()
+            } else {
+                anchorPosition = position
+            }
+            isPaused.toggle()
+            source.send(.playPause)
+
+        case .next:
+            source.send(.next)
+
+        case .previous:
+            // Past the first few seconds, "previous" restarts the song.
+            if position > 3 {
+                perform(.seek(0))
+                return
+            }
+            source.send(.previous)
+
+        case .seek(let seconds):
+            let target = nowPlaying.durationSec > 0
+                ? min(max(seconds, 0), nowPlaying.durationSec)
+                : max(seconds, 0)
+            anchorPosition = target
+            anchorDate = Date()
+            source.send(.seek(target))
+        }
+
+        // A reading soon after, so a skipped track or a refused command shows.
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            await self?.poll()
+        }
+    }
+
     func stop() {
         pollTask?.cancel()
         pollTask = nil
@@ -113,12 +177,12 @@ actor SyncEngine {
 
     private func poll() async {
         let snapshot = await withCheckedContinuation { continuation in
-            NowPlayingReader.readPosition { continuation.resume(returning: $0) }
+            source.readPosition { continuation.resume(returning: $0) }
         }
         await apply(snapshot)
     }
 
-    private func apply(_ snapshot: NowPlayingReader.FastSnapshot) async {
+    private func apply(_ snapshot: PlayerSnapshot) async {
         let observed = snapshot.positionSec
         let now = snapshot.takenAt
 
@@ -184,7 +248,7 @@ actor SyncEngine {
         defer { isLoadingTrack = false }
 
         let metadata = await withCheckedContinuation { continuation in
-            NowPlayingReader.readTrack { continuation.resume(returning: $0) }
+            source.readTrack { continuation.resume(returning: $0) }
         }
 
         var track = nowPlaying
@@ -192,31 +256,65 @@ actor SyncEngine {
         track.artist = metadata.artist
         track.album = metadata.album
         track.durationSec = metadata.durationSec
-        track.spotifyURL = metadata.spotifyURL
-        track.source = .spotify
+        track.spotifyURL = metadata.trackURL
+        track.source = source.id
         track.isPlaying = !isPaused
         track.positionSec = anchorPosition
         nowPlaying = track
 
         Log.line("sync: track changed to '\(track.title)' by '\(track.artist)'")
         lyrics = nil
+        lyricsNotFound = false
         isLoading = true
-        await loadLyrics(for: track)
+
+        // The lyrics are fetched in a task of their own. Waiting for them here
+        // would stop the polling, and with it the position, for as long as the
+        // sources take, and a later upgrade (real word timing) would keep it
+        // stopped even longer.
+        lyricsTask?.cancel()
+        lyricsTask = Task { [weak self] in await self?.loadLyrics(for: track) }
     }
 
     // MARK: - Lyrics
 
-    private func loadLyrics(for nowPlaying: NowPlaying) async {
-        defer { isLoading = false }
-        guard let fetched = await LyricsProvider.shared.lyrics(for: nowPlaying) else {
-            Log.line("sync: no lyrics for '\(nowPlaying.title)'")
-            return
+    /// Fetches the lyrics and keeps listening for a better version.
+    ///
+    /// The first answer is shown at once. A later one replaces it only when it
+    /// has real word timing and the first did not (`LyricsProvider` decides).
+    private func loadLyrics(for track: NowPlaying) async {
+        var found = await receive(from: LyricsProvider.shared.results(for: track), for: track)
+        guard !Task.isCancelled, loadedTitle == track.title else { return }
+        isLoading = false
+        guard !found else { return }
+
+        // Nothing found. The overlay moves the cover to the middle, and one more
+        // try is made a little later: the sources fail in bursts (LRCLIB answers
+        // 503 for a minute at a time), and a song that is missing now is often
+        // there a few seconds on.
+        lyricsNotFound = true
+        Log.line("sync: no lyrics for '\(track.title)', trying again in 8 s")
+
+        try? await Task.sleep(nanoseconds: 8_000_000_000)
+        guard !Task.isCancelled, loadedTitle == track.title else { return }
+
+        found = await receive(from: LyricsProvider.shared.results(for: track), for: track)
+        if found { Log.line("sync: the second try found lyrics for '\(track.title)'") }
+    }
+
+    /// Takes the lyrics from the stream as they arrive. Returns whether any did.
+    private func receive(from stream: AsyncStream<Lyrics>, for track: NowPlaying) async -> Bool {
+        var found = false
+        for await result in stream {
+            guard !Task.isCancelled, loadedTitle == track.title else { return found }
+            lyrics = result
+            lyricsNotFound = false
+            isLoading = false
+            found = true
+            Log.line("""
+            sync: lyrics for '\(track.title)' from \(result.source.rawValue) \
+            (\(result.lines.count) lines, word timing \(result.wordTimingQuality.rawValue))
+            """)
         }
-        lyrics = fetched
-        Log.line("""
-        sync: lyrics loaded for '\(nowPlaying.title)' \
-        (\(fetched.lines.count) lines, source \(fetched.source.rawValue), \
-        word timing \(fetched.wordTimingQuality.rawValue))
-        """)
+        return found
     }
 }

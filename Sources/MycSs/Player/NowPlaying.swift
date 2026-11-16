@@ -6,6 +6,7 @@ struct NowPlaying: Equatable {
     /// Which player the snapshot came from.
     enum Source: String {
         case spotify
+        case appleMusic
         case none
     }
 
