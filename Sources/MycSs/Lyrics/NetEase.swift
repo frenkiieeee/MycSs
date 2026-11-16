@@ -72,10 +72,21 @@ enum NetEase {
 
         for query in queries {
             guard let url = searchURL(for: query) else { continue }
-            guard let data = await HTTPCache.shared.data(for: url, headers: searchHeaders),
-                  let response = try? JSONDecoder().decode(SearchResponse.self, from: data),
-                  let songs = response.result?.songs, !songs.isEmpty
-            else { continue }
+            guard let data = await HTTPCache.shared.data(for: url, headers: searchHeaders) else {
+                Log.line("netease: no data for query '\(query)'")
+                continue
+            }
+            let response: SearchResponse
+            do {
+                response = try JSONDecoder().decode(SearchResponse.self, from: data)
+            } catch {
+                Log.line("netease: could not read the answer for '\(query)': \(error)")
+                continue
+            }
+            guard let songs = response.result?.songs, !songs.isEmpty else {
+                Log.line("netease: empty answer for '\(query)'")
+                continue
+            }
 
             if let match = pick(songs, for: nowPlaying, cleanTitle: cleanTitle) {
                 Log.line("netease: matched '\(match.name)' (id \(match.id)) via '\(query)'")

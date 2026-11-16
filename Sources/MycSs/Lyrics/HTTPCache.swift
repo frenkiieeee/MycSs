@@ -19,6 +19,15 @@ actor HTTPCache {
         configuration.timeoutIntervalForResource = 40
         configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        // **No cookies, on purpose.** NetEase sets a cookie (`NMTID`) on its first
+        // answer, and once a request carries it, the search returns unrelated
+        // songs (a Chinese ballad for "Shape of You"). Without the cookie every
+        // search is answered correctly. Measured against the live service: with
+        // cookies only the first lookup of a session matched, so the per-word
+        // timing almost never arrived. None of the lyric sources needs a session.
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpCookieStorage = nil
         return URLSession(configuration: configuration)
     }()
 

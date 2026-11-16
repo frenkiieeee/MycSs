@@ -43,6 +43,16 @@ enum LRCLib {
             group.addTask { await fetchExact(for: nowPlaying, includeAlbum: false) }
             group.addTask { await fetchSearch(for: nowPlaying, includeArtist: true) }
 
+            // Spotify and Music decorate titles ("- Remastered 2011", "(feat. X)")
+            // and credit several artists in one string. LRCLIB indexes the plain
+            // title and the first artist, so the same two lookups are also made
+            // with the decorations removed.
+            let plain = plainVersion(of: nowPlaying)
+            if plain.title != nowPlaying.title || plain.artist != nowPlaying.artist {
+                group.addTask { await fetchExact(for: plain, includeAlbum: false) }
+                group.addTask { await fetchSearch(for: plain, includeArtist: true) }
+            }
+
             // The first answer that passes the validation is used: the
             // candidates are checked against the title, the artist and the
             // length of the song, so a wrong song is rejected whoever answers.
@@ -55,6 +65,16 @@ enum LRCLib {
             // stricter with it.
             return await fetchSearch(for: nowPlaying, includeArtist: false)
         }
+    }
+
+    /// The track with the decorations of the title and the extra artists removed.
+    private static func plainVersion(of nowPlaying: NowPlaying) -> NowPlaying {
+        var plain = nowPlaying
+        let title = NetEase.cleanedTitle(nowPlaying.title)
+        if !title.isEmpty { plain.title = title }
+        let artist = NetEase.primaryArtist(nowPlaying.artist)
+        if !artist.isEmpty { plain.artist = artist }
+        return plain
     }
 
     // MARK: - Exact match
