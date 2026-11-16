@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let lockState = LockState()
     private var overlayController: LockOverlayController!
+    private var notchController: NotchController!
     private var statusItem: NSStatusItem!
     private var tickTimer: Timer?
     private var previewVisible = false
@@ -22,11 +23,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         installStatusItem()
         installMenu()
+        updateStatusItemVisibility()
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateStatusItemVisibility() }
+        }
 
         overlayController = LockOverlayController(lockState: lockState)
         overlayController.start()
+        notchController = NotchController(model: overlayController.sharedModel)
+        AccessibilityStatus.shared.start()
 
         lockState.start()
+
+        // The global shortcut for the screensaver.
+        HotKeyManager.shared.onPress = { [weak self] in
+            MainActor.assumeIsolated { self?.overlayController.togglePresentation() }
+        }
+        HotKeyManager.shared.reload()
+        NotificationCenter.default.addObserver(
+            forName: HotKeyManager.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.installMenu() }
+        }
 
         // The Spotify polling runs for the whole life of the app: while the Mac
         // is unlocked the app keeps knowing which track is playing, so the
@@ -47,10 +67,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // The lock screen creates its Space a moment after the lock
                 // notification, so the overlay follows it into place.
                 self?.overlayController.followLockScreen()
+                if let self {
+                    self.notchController.update(
+                        locked: self.overlayController.isScreenLocked,
+                        overlayVisible: self.overlayController.isOverlayVisible
+                    )
+                }
             }
         }
         tickTimer?.tolerance = 0.2
         RunLoop.main.add(tickTimer!, forMode: .common)
+
+        // `--style=music|frenkiieeee|classic|minimal` applies a look, to check it
+        // in a snapshot. `--cover-right` puts the cover on the right.
+        if let option = CommandLine.arguments.first(where: { $0.hasPrefix("--style=") }),
+           let preset = StylePreset(rawValue: String(option.dropFirst(8))) {
+            preset.apply(to: AppSettings.shared)
+        }
+        if CommandLine.arguments.contains("--cover-right") {
+            AppSettings.shared.coverOnRight = true
+        }
+
+        // `--notch-snapshot <prefix>` draws the notch in every state and quits.
+        if let index = CommandLine.arguments.firstIndex(of: "--notch-snapshot"),
+           CommandLine.arguments.count > index + 1 {
+            let prefix = CommandLine.arguments[index + 1]
+            overlayController.sharedModel.setNotchActive(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                let controller = self?.notchController
+                let volume = NotchHUD(kind: .volume, value: 0.62)
+                controller?.snapshot(to: "\(prefix)-closed.png", .closed)
+                controller?.snapshot(to: "\(prefix)-peek.png", .peek)
+                controller?.snapshot(to: "\(prefix)-open.png", .open(.home))
+                controller?.snapshot(to: "\(prefix)-shelf.png", .open(.shelf))
+                controller?.snapshot(to: "\(prefix)-hud-volume.png", .hud(volume))
+                controller?.snapshot(to: "\(prefix)-hud-brightness.png",
+                                     .hud(NotchHUD(kind: .brightness, value: 0.85)))
+                controller?.snapshot(to: "\(prefix)-open-volume.png", .openWithHUD(volume))
+                for widget in AppSettings.NotchWidget.allCases {
+                    controller?.snapshot(to: "\(prefix)-widget-\(widget.rawValue).png", .widget(widget))
+                }
+                controller?.snapshot(to: "\(prefix)-notification.png", .notification(open: false))
+                controller?.snapshot(to: "\(prefix)-notification-open.png", .notification(open: true))
+                controller?.snapshot(to: "\(prefix)-timer-closed.png", .timerClosed)
+                NSApp.terminate(nil)
+            }
+        }
+
+        // `--settings-snapshot <prefix>` draws the live previews of the settings.
+        if let index = CommandLine.arguments.firstIndex(of: "--settings-snapshot"),
+           CommandLine.arguments.count > index + 1 {
+            let prefix = CommandLine.arguments[index + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                SettingsPreviewSnapshot.run(prefix: prefix) { NSApp.terminate(nil) }
+            }
+        }
+
+        // `--notch-selftest <prefix>` (with `--demo`) shows the real notch window,
+        // walks it through its states and clicks its controls with real mouse
+        // events, saving a picture of each step.
+        if let index = CommandLine.arguments.firstIndex(of: "--notch-selftest"),
+           CommandLine.arguments.count > index + 1 {
+            guard CommandLine.arguments.contains("--demo") else {
+                print("--notch-selftest needs --demo, so it never touches the real player")
+                exit(2)
+            }
+            let prefix = CommandLine.arguments[index + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.notchController.runSelfTest(prefix: prefix) { exit(0) }
+            }
+        }
+
+        // `--present` opens the screensaver at once, for checking it.
+        if CommandLine.arguments.contains("--present") {
+            overlayController.showPresentation()
+        }
 
         // `--preview` shows the overlay immediately, without waiting for the
         // screen to be locked. Used to iterate on the layout without locking the
@@ -113,12 +204,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu bar
 
+    /// Hides the menu bar icon when the user asked and the notch is on: the notch
+    /// is then the way into the preferences. With the notch off the icon always
+    /// shows, so there is never an app without a way in.
+    ///
+    /// **It remembers what it last did instead of asking the status item.** Setting
+    /// `isVisible` makes AppKit write to `UserDefaults`, which posts the very
+    /// notification this runs on, *inside* the setter and before `isVisible` has
+    /// changed. Comparing with `statusItem.isVisible` therefore called the setter
+    /// again, forever, until the stack overflowed and the app closed.
+    private func updateStatusItemVisibility() {
+        let settings = AppSettings.shared
+        let visible = !(settings.hideMenuBarIcon && settings.notchEnabled)
+        guard visible != lastStatusItemVisible else { return }
+        lastStatusItemVisible = visible
+        statusItem.isVisible = visible
+        Log.line("menu bar icon: \(visible ? "shown" : "hidden")")
+    }
+
+    /// What `updateStatusItemVisibility` last set. `nil` until it runs once.
+    private var lastStatusItemVisible: Bool?
+
+    /// Opening MycSs again (Finder, Spotlight) opens the preferences: with the icon
+    /// hidden it is the other way in.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindowController.shared.show()
+        return true
+    }
+
     private func installStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "music.note",
-            accessibilityDescription: "MycSs"
-        )
+        // The mascot, packaged by build-app.sh. A plain `swift build` run has no
+        // bundle resources, so it falls back to the SF Symbol.
+        if let url = Bundle.main.url(forResource: "MenuIcon", withExtension: "png"),
+           let mascot = NSImage(contentsOf: url) {
+            mascot.size = NSSize(width: 18, height: 18)
+            // A template image: the system tints it for light and dark menu
+            // bars and for the highlighted state, like its own icons.
+            mascot.isTemplate = true
+            mascot.accessibilityDescription = "MycSs"
+            statusItem.button?.image = mascot
+        } else {
+            statusItem.button?.image = NSImage(
+                systemSymbolName: "music.note",
+                accessibilityDescription: "MycSs"
+            )
+        }
     }
 
     private func installMenu() {
@@ -160,6 +291,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         displayItem.submenu = displayMenu
         menu.addItem(displayItem)
+
+        // The lyrics as a screensaver. The shortcut is shown next to it.
+        let lyrics = NSMenuItem(
+            title: "Letras",
+            action: #selector(togglePresentation),
+            keyEquivalent: AppSettings.shared.hotKeyEnabled ? AppSettings.shared.hotKeyCharacter : ""
+        )
+        lyrics.keyEquivalentModifierMask = HotKeyManager.appKitModifiers(AppSettings.shared.hotKeyModifiers)
+        lyrics.target = self
+        menu.addItem(lyrics)
 
         // Development aid: show the overlay without locking the screen.
         let preview = NSMenuItem(
@@ -210,6 +351,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if lockState.isLocked {
             DisplayPower.apply(AppSettings.shared.powerMode)
         }
+    }
+
+    @objc @MainActor private func togglePresentation() {
+        overlayController.togglePresentation()
     }
 
     @objc @MainActor private func togglePreview() {

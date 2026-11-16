@@ -9,6 +9,8 @@ import Foundation
 /// Space lookup — and prints the values so they can be compared by hand.
 enum SelfTest {
 
+    private static let source = SpotifySource()
+
     static func run() async {
         print("== MycSs self test ==")
         print("platform: \(ProcessInfo.processInfo.operatingSystemVersionString)")
@@ -16,7 +18,7 @@ enum SelfTest {
         // 1. AppleScript reader against the live Spotify app.
         let state = SelfTest.readTrack()
         let latency = SelfTest.measureLatency()
-        print("\n-- NowPlayingReader --")
+        print("\n-- SpotifySource --")
         print("  source:     \(state.source.rawValue)")
         print("  isPlaying:  \(state.isPlaying)")
         print("  title:      \(state.title)")
@@ -32,6 +34,43 @@ enum SelfTest {
         if state.isPlaying, state.positionSec == 0 {
             print("  !! WARNING: playing but position is 0 - number parsing failed")
         }
+
+        // 1b. The same reading for Apple Music, and what the hub would pick.
+        print("\n-- AppleMusicSource and PlayerHub --")
+        let music = AppleMusicSource()
+        let hub = PlayerHub()
+        let musicSemaphore = DispatchSemaphore(value: 0)
+        music.readPosition { snapshot in
+            print("  music:   playing=\(snapshot.isPlaying) title='\(snapshot.title)' position=\(String(format: "%.2f", snapshot.positionSec)) latency=\(String(format: "%.1f", snapshot.latency * 1000)) ms")
+            musicSemaphore.signal()
+        }
+        musicSemaphore.wait()
+        let hubSemaphore = DispatchSemaphore(value: 0)
+        hub.readPosition { snapshot in
+            print("  hub:     follows \(hub.id.rawValue), title='\(snapshot.title)'")
+            hubSemaphore.signal()
+        }
+        hubSemaphore.wait()
+
+        // 1b2. Who macOS thinks this app is. A permission is tied to this.
+        print("\n-- App identity --")
+        let identity = AppIdentity.requirement
+        print("  \(identity)")
+        print(identity.hasPrefix("cdhash")
+              ? "  (ad-hoc: changes with every build, so permissions are lost on each one)"
+              : "  OK: tied to the certificate, stable between builds")
+
+        // 1c. The commands the player controls send. They are only checked as text:
+        // sending them would pause whatever the user is listening to.
+        print("\n-- Player commands --")
+        let seek = AppleScriptValue.statement(for: .seek(12.5))
+        print("  seek:     \(seek)")
+        print(seek == "set player position to 12.50"
+              ? "  OK: the position is written with a point"
+              : "  !! WARNING: the position must be written with a point, got '\(seek)'")
+        print("  next:     \(AppleScriptValue.statement(for: .next))")
+        print("  previous: \(AppleScriptValue.statement(for: .previous))")
+        print("  playpause: \(AppleScriptValue.statement(for: .playPause))")
 
         // 2. Repeated reads, to confirm the position advances.
         print("\n-- position advance (2 reads, 1.2s apart) --")
@@ -83,21 +122,21 @@ enum SelfTest {
         var result = NowPlaying()
         let semaphore = DispatchSemaphore(value: 0)
         // The title comes from the fast reading, the rest from the slow one.
-        NowPlayingReader.readPosition { snapshot in
+        source.readPosition { snapshot in
             title = snapshot.title
             semaphore.signal()
         }
         semaphore.wait()
 
         let metadataSemaphore = DispatchSemaphore(value: 0)
-        NowPlayingReader.readTrack { metadata in
+        source.readTrack { metadata in
             result = NowPlaying()
             result.source = .spotify
             result.title = title
             result.artist = metadata.artist
             result.album = metadata.album
             result.durationSec = metadata.durationSec
-            result.spotifyURL = metadata.spotifyURL
+            result.spotifyURL = metadata.trackURL
             metadataSemaphore.signal()
         }
         metadataSemaphore.wait()
@@ -108,7 +147,7 @@ enum SelfTest {
     private static func readPosition() -> Double {
         var result: Double = 0
         let semaphore = DispatchSemaphore(value: 0)
-        NowPlayingReader.readPosition { snapshot in
+        source.readPosition { snapshot in
             result = snapshot.positionSec
             semaphore.signal()
         }
@@ -120,7 +159,7 @@ enum SelfTest {
     private static func measureLatency() -> TimeInterval {
         var result: TimeInterval = 0
         let semaphore = DispatchSemaphore(value: 0)
-        NowPlayingReader.readPosition { snapshot in
+        source.readPosition { snapshot in
             result = snapshot.latency
             semaphore.signal()
         }
