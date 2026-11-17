@@ -15,8 +15,8 @@ import SwiftUI
 /// follow the text instead of losing it.
 ///
 /// **Why the movement is done by hand**: SwiftUI's own `scrollPosition` and
-/// `scrollTo` do nothing on this system — the offset of the scroll view stays
-/// where it is — so the column is moved with an offset instead. The offset is
+/// `scrollTo` do nothing on this system, the offset of the scroll view stays
+/// where it is, so the column is moved with an offset instead. The offset is
 /// worked out from the height of each line, which is measured as the lines are
 /// laid out.
 ///

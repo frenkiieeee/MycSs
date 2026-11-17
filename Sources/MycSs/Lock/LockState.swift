@@ -12,7 +12,7 @@ import Foundation
 /// 2. `CGSessionCopyCurrentDictionary()`, which reports whether the session is on
 ///    the console. This is only consulted to *seed* the initial state, because a
 ///    process that starts while the screen is already locked would otherwise
-///    believe it is unlocked forever — the transition notifications have already
+///    believe it is unlocked forever, the transition notifications have already
 ///    been and gone by then.
 final class LockState {
 
@@ -60,7 +60,7 @@ final class LockState {
     /// The demo shows the overlay as an ordinary window, so it must not follow
     /// the lock screen into its Space: the picture would come out empty and
     /// the window would be dragged off the screen.
-    private let isDemo = CommandLine.arguments.contains("--demo")
+    private let isDemo = DemoFlags.isDemo
 
     /// Reads the current state, cached for a short window.
     ///

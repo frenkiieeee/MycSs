@@ -16,7 +16,7 @@ import Foundation
 /// the ones that were just pressed.
 ///
 /// **What the app does with them**: the lock screen's field belongs to
-/// `loginwindow` and its content cannot be read — not with the Accessibility
+/// `loginwindow` and its content cannot be read, not with the Accessibility
 /// permission either, because a secure field stays unreadable on purpose. The
 /// app therefore rebuilds what the user writes from the keys it sees, and it
 /// shows it masked. The eye button is the user's own choice to look at it.

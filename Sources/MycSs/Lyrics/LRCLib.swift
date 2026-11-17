@@ -175,7 +175,7 @@ enum LRCLib {
     /// a candidate has to satisfy the checks below.
     ///
     /// - Parameter strict: when the search was made by title alone, the artist
-    ///   has to match as well — the results contain many different songs that
+    ///   has to match as well, the results contain many different songs that
     ///   share the title.
     private static func pick(
         _ candidates: [Candidate],

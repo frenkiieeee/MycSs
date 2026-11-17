@@ -4,12 +4,12 @@ import Foundation
 ///
 /// Two formats are supported:
 ///
-/// **LRC** (LRCLIB) — one timestamp per line:
+/// **LRC** (LRCLIB): one timestamp per line:
 /// ```
 /// [00:12.34] Some lyrics here
 /// ```
 ///
-/// **yrc** (NetEase) — one timestamp per line *plus* a timestamp per word:
+/// **yrc** (NetEase): one timestamp per line *plus* a timestamp per word:
 /// ```
 /// [0,5040](0,420,0)My (420,960,0)regrets (1380,360,0)look
 /// ```
@@ -17,7 +17,7 @@ import Foundation
 /// `(offsetMs,durationMs,0)` with the offset relative to the line start.
 ///
 /// yrc files also open with JSON credit lines such as
-/// `{"t":-1000,"c":[{"tx":"作词: "},{"tx":"Jon Brion"}]}` — production credits,
+/// `{"t":-1000,"c":[{"tx":"作词: "},{"tx":"Jon Brion"}]}`, production credits,
 /// not lyrics. They are dropped.
 enum LyricsParser {
 

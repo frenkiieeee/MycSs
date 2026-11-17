@@ -15,7 +15,7 @@ import Foundation
 /// across the whole gap.
 ///
 /// **How the pauses are handled**: a line does not always fill the time until
-/// the next line — the singer often pauses, and a long instrumental break
+/// the next line, the singer often pauses, and a long instrumental break
 /// follows. The words are therefore distributed over the *natural* length of the
 /// line (its characters at the song's pace) rather than over the whole slot, so
 /// the highlight finishes when the singing finishes and waits quietly through

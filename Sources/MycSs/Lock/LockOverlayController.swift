@@ -44,7 +44,7 @@ final class LockOverlayController {
     ///
     /// The Space lookup is the correct trigger, but it is an implementation
     /// detail of the window server. If something changes and the Space cannot be
-    /// found, the overlay must still appear — a late overlay is much better than
+    /// found, the overlay must still appear, a late overlay is much better than
     /// no overlay at all.
     private let lockScreenTimeout: TimeInterval = 1.2
 
@@ -363,7 +363,7 @@ final class LockOverlayController {
         )
         let host = NSHostingView(rootView: OverlayRootView(model: model, displayID: displayID))
         // The hosting view is created with a zero frame. Without an explicit one
-        // it stays zero-sized and the panel renders nothing at all — the window is
+        // it stays zero-sized and the panel renders nothing at all, the window is
         // on screen but its content is invisible.
         host.frame = frame
         host.autoresizingMask = [.width, .height]

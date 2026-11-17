@@ -110,7 +110,7 @@ struct Theme: Equatable {
 ///    (saturation < 0.18). This is what the "most saturated pixel" approach
 ///    gets wrong: on a grey cover it picks white, which is invisible as a glow
 ///    and useless as text.
-/// 3. If nothing survives, the artwork carries no usable colour — the theme
+/// 3. If nothing survives, the artwork carries no usable colour, the theme
 ///    falls back to the default rather than inventing one.
 /// 4. Cluster the survivors with k-means (k=3) and find the dominant hue with a
 ///    12-sector histogram.
@@ -127,7 +127,7 @@ enum ArtworkPalette {
         //
         // The channels are normalised to 0...1, so the brightness threshold is
         // 0.27 (which is 70/255). It used to be written as `70`, which no pixel
-        // could ever reach — that is why every cover looked colourless.
+        // could ever reach, that is why every cover looked colourless.
         let colourful = pixels.filter { pixel in
             let maximum = max(pixel.red, pixel.green, pixel.blue)
             let minimum = min(pixel.red, pixel.green, pixel.blue)

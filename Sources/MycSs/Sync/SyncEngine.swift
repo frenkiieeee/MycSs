@@ -7,7 +7,7 @@ import Foundation
 /// moves smoothly at frame rate instead of jumping once per poll.
 ///
 /// **How the delay is kept low**: the fast reading asks for the position, the
-/// playing state and the track title — about 25 ms. The title is what says
+/// playing state and the track title, about 25 ms. The title is what says
 /// whether the track changed; the expensive metadata (artist, album, length) is
 /// only fetched when the title changes, which happens once per song instead of
 /// several times per second. An earlier version asked for everything on every
@@ -16,7 +16,7 @@ import Foundation
 /// The interpolation is anchored to the last observed position and advanced by
 /// the elapsed wall time, and re-anchored on every poll. If the polls drift
 /// (because the machine was asleep, or the app was busy), the anchor is
-/// corrected towards the new observation rather than being trusted blindly — a
+/// corrected towards the new observation rather than being trusted blindly, a
 /// jump larger than a threshold means the track was seeked.
 actor SyncEngine {
 

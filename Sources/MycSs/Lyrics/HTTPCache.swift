@@ -3,7 +3,7 @@ import Foundation
 /// A cache of HTTP responses with retries, used by the lyric providers.
 ///
 /// **Why the retries matter**: LRCLIB, the main lyric source, fails with
-/// `503 ServerOverloaded` very often — measured on this machine, four of five
+/// `503 ServerOverloaded` very often, measured on this machine, four of five
 /// back-to-back requests failed while one succeeded. It is a transient
 /// condition, not a missing lyric, so the request has to be tried again.
 ///

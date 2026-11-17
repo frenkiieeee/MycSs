@@ -20,8 +20,8 @@ import Foundation
 /// its windows is in. Asking "where is the lock screen?" is therefore answered
 /// directly, by asking the window server.
 ///
-/// The earlier approach — comparing Space *ids* to notice that a new one had
-/// appeared — was fragile: Space ids are not ordered the way one would assume
+/// The earlier approach, comparing Space *ids* to notice that a new one had
+/// appeared, was fragile: Space ids are not ordered the way one would assume
 /// across sessions, so a fresh lock could fail to be noticed and the overlay
 /// would only show on the *second* lock.
 final class SkyLight {
@@ -98,7 +98,7 @@ final class SkyLight {
     /// Resolves the symbols and opens the connection, before it is needed.
     ///
     /// The first lock is the one that has to work, and doing this work at the
-    /// moment of the lock costs a tenth of a second — the overlay is on screen
+    /// moment of the lock costs a tenth of a second, the overlay is on screen
     /// but not yet lifted above the lock screen.
     func prepare() {
         guard ensureConnection() != nil else { return }
@@ -169,7 +169,7 @@ final class SkyLight {
     /// The lock screen gets a Space of its own, and it is a *new* one: the
     /// spaces of the previous locks are gone by the time the screen is locked
     /// again. So the lock screen's Space is the one of type 3 that was not
-    /// there before the lock — and that is the only way to tell it apart from
+    /// there before the lock, and that is the only way to tell it apart from
     /// the leftovers of the last lock, which are what makes the overlay
     /// invisible the first time the screen is locked after the app starts.
     private var spacesBeforeLock: Set<UInt64> = []
@@ -253,7 +253,7 @@ final class SkyLight {
         // Two ways to find it, and the order matters:
         //
         // 1. The Space the `loginwindow` windows are in. This is authoritative
-        //    but only becomes available *after* the lock screen has been drawn —
+        //    but only becomes available *after* the lock screen has been drawn ,
         //    while the Mac is unlocked, `loginwindow` has a window that belongs
         //    to no Space at all.
         // 2. The first type-3 Space in the window server's list. This works from
@@ -334,7 +334,7 @@ final class SkyLight {
     /// The lock screen's Space does not exist at the moment the overlay is first
     /// shown: the window server creates it a fraction of a second later. So the
     /// window is placed in the best known lock Space and then **moved again** as
-    /// soon as the real one appears — that is the Space the lock screen is
+    /// soon as the real one appears, that is the Space the lock screen is
     /// actually being drawn in.
     ///
     /// Without this the overlay stays in the Space of the *previous* lock, which
