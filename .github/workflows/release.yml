@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches VERSION
+        run: test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}"
+      - name: Build the disk image
+        run: ./scripts/make-dmg.sh
+      - name: Release notes from the changelog
+        run: |
+          V="$(tr -d '[:space:]' < VERSION)"
+          awk -v v="## [$V]" 'index($0, v) == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MycSs-*.dmg
+            dist/MycSs-*.dmg.sha256
+          generate_release_notes: false
+          body_path: notes.md
