@@ -14,6 +14,11 @@ application.delegate = delegate
 // An agent app: no Dock icon, just the menu bar item.
 application.setActivationPolicy(.accessory)
 
+if CommandLine.arguments.contains("--version") {
+    print("MycSs \(AppVersion.display)")
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--inspect-spaces") {
     SpaceInspector.run()
     exit(0)
@@ -40,6 +45,15 @@ if CommandLine.arguments.contains("--cover-bench") {
 if CommandLine.arguments.contains("--lyrics-bench") {
     Task {
         await LyricsBench.run()
+        exit(0)
+    }
+    application.run()
+    exit(0)
+}
+
+if CommandLine.arguments.contains("--selftest-pure") {
+    Task {
+        await SelfTest.runPure()
         exit(0)
     }
     application.run()

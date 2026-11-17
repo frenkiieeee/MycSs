@@ -19,12 +19,21 @@ APP="MycSs.app"
 CONTENTS="${APP}/Contents"
 BUNDLE_ID="com.mycss.lyrics"
 
+# The version has one source, the VERSION file (semantic versioning). The build
+# number is the number of commits, so every build of the same version differs.
+VERSION="$(tr -d '[:space:]' < VERSION)"
+BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+if ! echo "${VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+    echo "ERROR: VERSION '${VERSION}' is not a semantic version (x.y.z)" >&2
+    exit 1
+fi
+
 if [ "$CONFIG" = "debug" ]; then
     echo ">> Building debug binary..."
     swift build
     BUILT=".build/debug/MycSs"
 else
-    echo ">> Building release binary..."
+    echo ">> Building release binary (MycSs ${VERSION})..."
     swift build -c release
     BUILT=".build/release/MycSs"
 fi
@@ -50,9 +59,9 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
     <key>CFBundleExecutable</key><string>MycSs</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+    <key>CFBundleVersion</key><string>${BUILD}</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
     <!-- Agent app: lives in the menu bar, no Dock icon. -->
     <key>LSUIElement</key><true/>
     <!-- Required for the Apple Events that read the current track from Spotify and Music. -->
@@ -115,7 +124,7 @@ else
     codesign --force --deep --sign - "${APP}"
 fi
 
-echo ">> Built $(pwd)/${APP}"
+echo ">> Built $(pwd)/${APP}  (version ${VERSION}, build ${BUILD})"
 echo
 echo "   Run it:  open ${APP}"
 echo "   Test it: Cmd+L to lock the screen, then look for the red overlay."
