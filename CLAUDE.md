@@ -12,6 +12,10 @@ Antes de tocar nada lee `docs/README.md` (índice). La hoja de ruta y las decisi
 swift build                    # solo compila
 ./scripts/verify.sh            # build + selftest + comprobación de enlaces de docs
 ./MycSs.app/Contents/MacOS/MycSs --selftest
+./MycSs.app/Contents/MacOS/MycSs --selftest-pure   # sin Spotify, permisos ni red (lo usa la CI)
+./MycSs.app/Contents/MacOS/MycSs --version
+./scripts/make-dmg.sh          # dist/MycSs-<versión>.dmg + sha256
+./scripts/release.sh X.Y.Z     # prepara una versión; imprime los git tag y push, no los ejecuta
 ./MycSs.app/Contents/MacOS/MycSs --preview --demo --snapshot /tmp/overlay.png
 tail -f ~/Library/Logs/MycSs.log
 ```
@@ -28,6 +32,13 @@ Ejecuta el binario del `.app` (no `.build/debug/MycSs`) cuando pruebes Spotify o
 - **AppleScript, no MediaRemote**: MediaRemote está bloqueado para terceros desde macOS 15.4. Ver `docs/decisions/001-applescript-no-mediaremote.md`.
 - **boring.notch es GPL-3.0**: inspiración de producto, nunca copiar su código. Ver `docs/decisions/002-gpl-boringnotch.md`.
 - El overlay del lock screen es click-through y no puede ser key window; si roba el foco, la Mac no se puede desbloquear.
+
+## Versiones y distribución
+
+- Versión semántica, fuente única: el archivo `VERSION`. `build-app.sh` la escribe en el `Info.plist`; el build es el número de commits. No la escribas a mano en otro sitio. Reglas en `docs/decisions/006-versionado-y-distribucion.md`, pasos en `docs/RELEASING.md`, historial en `CHANGELOG.md` (en inglés, se actualiza con cada cambio visible bajo `[Unreleased]`).
+- Se instala con DMG, `install.sh` o el cask de `packaging/homebrew/`. Sin notarizar: la firma cambia en cada release y macOS pierde Accesibilidad y Acceso total al disco.
+- El código de pruebas y capturas vive en `Sources/MycSs/Harness/`, no en los archivos de producción. Los flags `--demo*` se leen solo en `Support/DemoFlags.swift`.
+- Las claves de ajustes se escriben solo en `Settings/SettingKey.swift`; `StyleDomain.keys` las usa, así que no hay cadenas sueltas.
 
 ## Cómo trabajar
 

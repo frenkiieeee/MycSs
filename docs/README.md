@@ -7,7 +7,9 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | [brand/](brand/frenkiieeee.md) | Marca Frenkiieeee: paleta, tipografía, mascota, tono |
 | [architecture/](architecture/overview.md) | Cómo está montada la app y [cómo fluyen los datos](architecture/data-flow.md) |
 | [specs/](specs/_template.md) | Un spec por funcionalidad, antes de construirla |
-| [decisions/](decisions/001-applescript-no-mediaremote.md) | Decisiones difíciles de revertir, en formato corto |
+| [decisions/](decisions/001-applescript-no-mediaremote.md) | Decisiones difíciles de revertir, en formato corto (la [006](decisions/006-versionado-y-distribucion.md) trata de versiones y distribución) |
+| [architecture/internals.md](architecture/internals.md) | Notas técnicas por dentro: lectura de la música, retardo, notch, permisos, trampas |
+| [RELEASING.md](RELEASING.md) | Cómo se publica una versión |
 
 ## Hoja de ruta
 
@@ -22,7 +24,8 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 1b | Reproductor, salir con Esc o clic, portada centrada | [007](specs/007-player-controls.md) |
 | 1c | Cambio de canción animado, con y sin letra | [008](specs/008-song-transition.md) |
 | 4b | Crear eventos y recordatorios desde el notch | [009](specs/009-quick-add.md) |
-| 5 | Firma, icono, onboarding | pendiente |
+| 5 | Versión, DMG, Homebrew, ajustes ordenados y restaurar | [010](specs/010-release-and-settings.md) |
+| 6 | Notarización con Developer ID | pendiente |
 
 ## Cómo usarlos con agentes
 
