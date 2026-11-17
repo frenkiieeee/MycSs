@@ -162,7 +162,7 @@ final class LyricsViewModel {
 
     /// - Parameter demo: a synthetic song on its own clock instead of the real
     ///   player. The settings previews use it, so they never touch the music.
-    init(demo: Bool = CommandLine.arguments.contains("--demo")) {
+    init(demo: Bool = DemoFlags.isDemo) {
         isDemo = demo
         // One hub shared by the engine and the theme, so both follow the same
         // player.
@@ -205,7 +205,7 @@ final class LyricsViewModel {
 
         // `--snapshot-loading` simulates the state where the lyrics have not
         // arrived yet, so the loading layout can be checked.
-        if CommandLine.arguments.contains("--snapshot-loading") {
+        if DemoFlags.loading {
             forceLoadingState = true
         }
 
@@ -461,7 +461,7 @@ final class LyricsViewModel {
     }
 
     /// Whether the demo timeline was paused with the play button.
-    @ObservationIgnored private var demoPaused = CommandLine.arguments.contains("--demo-paused")
+    @ObservationIgnored private var demoPaused = DemoFlags.paused
 
     private func press(_ id: String, _ command: PlayerCommand) {
         pressedControl = id
@@ -522,42 +522,13 @@ final class LyricsViewModel {
     /// The lyrics of the demo timeline.
     private var demoLyrics: Lyrics?
 
-    /// A short song with lines of different lengths, so the layout and the
-    /// scrolling can be seen.
-    private static let demoLRC = """
-    [00:00.00] The first line of the demo song
-    [00:03.00] A second line that is a little bit longer than the first one
-    [00:06.00] Third
-    [00:09.00] And this line is quite a lot longer, so that it has to wrap into more than one row of text
-    [00:12.00] Short again
-    [00:15.00] Another one
-    [00:18.00] The last line of the first verse
-    [00:21.00] The second verse begins right here
-    [00:24.00] With a line that is long enough to wrap around the column of text
-    [00:27.00] Almost done
-    [00:30.00] The end
-    """
-
-    private static let demoLRC2 = """
-    [00:00.00] Another song begins, and the screen follows it
-    [00:04.00] The cover changes first
-    [00:07.00] Then the title
-    [00:10.00] And the lyrics arrive from below, one line after the other, without a cut
-    [00:14.00] Smooth
-    [00:17.00] No jumps
-    [00:20.00] Even when the song before had no lyrics at all
-    [00:24.00] The column finds its place
-    [00:28.00] Quietly
-    [00:31.00] The end
-    """
-
     /// The two songs of the demo, to see the change from one to the other.
     @ObservationIgnored private var demoSongIndex = 0
     /// What the column was last given in the demo: which song, or none.
     @ObservationIgnored private var demoShownKey: String?
 
     private static func makeDemoLyrics(_ index: Int) -> Lyrics {
-        let lines = WordInterpolator.interpolate(LyricsParser.parseLRC(index == 0 ? demoLRC : demoLRC2))
+        let lines = WordInterpolator.interpolate(LyricsParser.parseLRC(index == 0 ? DemoContent.lrc : DemoContent.lrc2))
         return Lyrics(lines: lines, duration: 34, source: .lrclib, wordTimingQuality: .interpolated)
     }
 
@@ -573,7 +544,7 @@ final class LyricsViewModel {
         demoSongIndex = (demoSongIndex + 1) % 2
         demoAnchor = Date()
         demoLyrics = Self.makeDemoLyrics(demoSongIndex)
-        let cover = Self.demoCover(variant: demoSongIndex)
+        let cover = DemoContent.cover(variant: demoSongIndex)
         swapArtwork(to: cover)
         if let derived = ArtworkPalette.theme(from: cover) { theme = derived }
         track = demoTrack(demoSongIndex)
@@ -592,16 +563,16 @@ final class LyricsViewModel {
         if isSettingsPreview { elapsed = elapsed.truncatingRemainder(dividingBy: 34) }
         // `--demo-nolyrics` pretends no source had the lyrics, to check how the
         // cover moves to the middle.
-        let lyrics = (CommandLine.arguments.contains("--demo-nolyrics") || previewWithoutLyrics) ? nil : demoLyrics
+        let lyrics = (DemoFlags.noLyrics || previewWithoutLyrics) ? nil : demoLyrics
         let notFound = lyrics == nil
         if lyricsNotFound != notFound { lyricsNotFound = notFound }
         // A cover, so the layout can be judged. `--demo-mascot` uses the mascot;
         // otherwise a coloured square, which looks like an album and gives the
         // theme real colours to work with.
         if artwork == nil {
-            let image: NSImage? = CommandLine.arguments.contains("--demo-mascot")
+            let image: NSImage? = DemoFlags.mascot
                 ? NSImage(contentsOfFile: "Assets/Mascot/png/mycss-feliz-512.png")
-                : Self.demoCover()
+                : DemoContent.cover()
             if let image {
                 artwork = image
                 if let derived = ArtworkPalette.theme(from: image) { theme = derived }
@@ -652,23 +623,6 @@ final class LyricsViewModel {
         }
     }
 
-    /// A coloured square that stands in for an album cover in the demo.
-    private static func demoCover(variant: Int = 0) -> NSImage {
-        let size = NSSize(width: 512, height: 512)
-        let colors: [NSColor] = variant == 0
-            ? [NSColor(red: 0.98, green: 0.36, blue: 0.22, alpha: 1),
-               NSColor(red: 0.72, green: 0.12, blue: 0.45, alpha: 1),
-               NSColor(red: 0.20, green: 0.10, blue: 0.55, alpha: 1)]
-            : [NSColor(red: 0.10, green: 0.80, blue: 0.70, alpha: 1),
-               NSColor(red: 0.08, green: 0.40, blue: 0.75, alpha: 1),
-               NSColor(red: 0.05, green: 0.12, blue: 0.40, alpha: 1)]
-        return NSImage(size: size, flipped: false) { rect in
-            NSGradient(colors: colors)?.draw(in: rect, angle: -50)
-            NSColor.white.withAlphaComponent(0.16).setFill()
-            NSBezierPath(ovalIn: NSRect(x: 150, y: 190, width: 300, height: 300)).fill()
-            return true
-        }
-    }
 
     /// Moves the entrance forward with the clock.
     ///

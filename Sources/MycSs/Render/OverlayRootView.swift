@@ -34,7 +34,7 @@ struct OverlayRootView: View {
         let _ = revision
         // The outermost view is a plain rectangle that fills whatever space it is
         // given. Without it, a `GeometryReader` at the root has nothing to
-        // measure and the whole view collapses to a few points — the window is on
+        // measure and the whole view collapses to a few points, the window is on
         // screen but nothing is drawn in it.
         ZStack {
             Color.clear
@@ -184,7 +184,7 @@ struct OverlayRootView: View {
     /// so it reads as the cover finding its place.
     ///
     /// The title and the artist sit under the artwork, aligned to the artwork's
-    /// own left edge — not to the edge of the column, which is wider than the
+    /// own left edge, not to the edge of the column, which is wider than the
     /// cover and would leave the text hanging outside it.
     @ViewBuilder
     private func artworkColumnView(
