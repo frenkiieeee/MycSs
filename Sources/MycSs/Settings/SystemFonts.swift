@@ -9,8 +9,8 @@ import Foundation
 /// around 2,700.
 ///
 /// **The system font is a special case**: Apple's own typeface (SF Pro) cannot
-/// be requested by name — CoreText refuses to hand out the system fonts, and
-/// falls back to Times — so it is represented by a sentinel and resolved
+/// be requested by name, CoreText refuses to hand out the system fonts, and
+/// falls back to Times, so it is represented by a sentinel and resolved
 /// through `NSFont.systemFont`, which is the only correct way to get it.
 enum SystemFonts {
 
@@ -28,7 +28,7 @@ enum SystemFonts {
         var displayName: String {
             styleName.isEmpty || styleName == "Regular"
                 ? familyName
-                : "\(familyName) — \(styleName)"
+                : "\(familyName) · \(styleName)"
         }
     }
 
