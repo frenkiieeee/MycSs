@@ -2,39 +2,34 @@ import AppKit
 import Observation
 import SwiftUI
 
-/// Whether the notch can read the notifications, looked at while the page is open.
-@MainActor
+/// The part of the notch settings that is open. It lives in an observable object
+/// because `@State` is not available in this build.
 @Observable
-final class NotificationAccessStatus {
-    static let shared = NotificationAccessStatus()
-    private(set) var access: NotificationsModel.Access = .unknown
-    @ObservationIgnored private var timer: Timer?
+final class NotchSettingsNav {
+    static let shared = NotchSettingsNav()
 
-    func start() {
-        guard timer == nil else { return }
-        check()
-        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.check() }
+    enum Tab: String, CaseIterable, Identifiable {
+        case styles, look, music, indicators, widgets, system
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .styles: return "Estilos"
+            case .look: return "Aspecto"
+            case .music: return "Música"
+            case .indicators: return "Volumen"
+            case .widgets: return "Widgets"
+            case .system: return "Sistema"
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
     }
 
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func check() {
-        let probe = NotificationsModel()
-        probe.logsChanges = false
-        let result = probe.checkAccess()
-        if result != access { access = result }
-    }
+    var tab: Tab = .styles
 }
 
 /// Everything about the notch, with the notch itself drawn on top.
 struct NotchSettingsPage: View {
+    @Bindable var nav = NotchSettingsNav.shared
     @Bindable var settings = AppSettings.shared
     /// Settings live in `UserDefaults`, which SwiftUI does not watch: reading this
     /// redraws the page on every change, so the controls show what was clicked.
@@ -48,14 +43,29 @@ struct NotchSettingsPage: View {
             NotchPreviewCard()
                 .padding(.horizontal)
             Form {
-                looks
-                sizeAndMotion
-                appearance
-                music
-                indicators
-                widgets
-                notifications
-                menuBar
+                master
+                Picker("Parte", selection: $nav.tab) {
+                    ForEach(NotchSettingsNav.Tab.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                switch nav.tab {
+                case .styles:
+                    looks
+                case .look:
+                    sizeAndMotion
+                    appearance
+                case .music:
+                    music
+                case .indicators:
+                    indicators
+                case .widgets:
+                    widgets
+                    notifications
+                case .system:
+                    menuBar
+                }
             }
             .formStyle(.grouped)
         }
@@ -153,8 +163,9 @@ struct NotchSettingsPage: View {
         }
     }
 
-    private var music: some View {
-        Section("Música") {
+    /// The switch for the whole notch, and where it shows. Always on top.
+    private var master: some View {
+        Section("Notch") {
             Toggle("Mostrar el notch de MycSs", isOn: $settings.notchEnabled)
             if NSScreen.screens.count > 1 || settings.notchDisplays == .all {
                 Picker("Pantallas", selection: $settings.notchDisplays) {
@@ -164,6 +175,11 @@ struct NotchSettingsPage: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var music: some View {
+        Section("Música") {
             Toggle("Portada y visualizador a los lados mientras suena", isOn: $settings.notchWings)
             Toggle("Plegar el notch cuando no suena nada", isOn: $settings.notchHideWhenIdle)
             Toggle("Mostrar título y artista al cambiar de canción", isOn: $settings.notchPeek)

@@ -263,6 +263,34 @@ struct LyricsSettingsTab: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 }
+
+                Section("Cambio de canción") {
+                    Picker("Animación", selection: $settings.songTransition) {
+                        ForEach(AppSettings.SongTransition.allCases, id: \.self) { kind in
+                            Text(kind.title).tag(kind)
+                        }
+                    }
+
+                    if settings.songTransition != .off {
+                        HStack {
+                            Text("Duración")
+                            Slider(value: $settings.songTransitionSeconds, in: 0.25...1.8)
+                            Text(String(format: "%.1f s", settings.songTransitionSeconds))
+                                .monospacedDigit()
+                                .frame(width: 50, alignment: .trailing)
+                        }
+                    }
+
+                    Text("""
+                    Al pasar a otra canción, la letra vieja sale, la portada nueva entra \
+                    sobre la anterior, el título cambia y la letra nueva entra desde abajo. \
+                    Si una de las dos no tiene letra, la portada se mueve al centro o \
+                    vuelve a su sitio sin cortes. Usa «Cambiar canción» en la vista previa \
+                    para verlo, y «Con letra» y «Sin letra» para ver cada caso.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
         }
@@ -316,34 +344,6 @@ struct AppearanceSettingsTab: View {
                     }
                 }
 
-                Section("Cambio de canción") {
-                    Picker("Animación", selection: $settings.songTransition) {
-                        ForEach(AppSettings.SongTransition.allCases, id: \.self) { kind in
-                            Text(kind.title).tag(kind)
-                        }
-                    }
-
-                    if settings.songTransition != .off {
-                        HStack {
-                            Text("Duración")
-                            Slider(value: $settings.songTransitionSeconds, in: 0.25...1.8)
-                            Text(String(format: "%.1f s", settings.songTransitionSeconds))
-                                .monospacedDigit()
-                                .frame(width: 50, alignment: .trailing)
-                        }
-                    }
-
-                    Text("""
-                    Al pasar a otra canción, la letra vieja sale, la portada nueva entra \
-                    sobre la anterior, el título cambia y la letra nueva entra desde abajo. \
-                    Si una de las dos no tiene letra, la portada se mueve al centro o \
-                    vuelve a su sitio sin cortes. Usa «Cambiar canción» en la vista previa \
-                    para verlo, y «Con letra» y «Sin letra» para ver cada caso.
-                    """)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                }
-
                 Section("Aparición") {
                     Picker("Entrada", selection: $settings.entranceAnimation) {
                         ForEach(AppSettings.Entrance.allCases, id: \.self) { entrance in
@@ -385,6 +385,8 @@ struct AppearanceSettingsTab: View {
 
 struct GeneralSettingsPage: View {
     @Bindable var settings = AppSettings.shared
+    @Bindable var login = LaunchAtLogin.shared
+    @Bindable var undo = PresetUndo.shared
     /// Settings live in `UserDefaults`, which SwiftUI does not watch: reading this
     /// redraws the page on every change, so the controls show what was clicked.
     @Bindable var revision = SettingsRevision.shared
@@ -436,6 +438,38 @@ struct GeneralSettingsPage: View {
                 .foregroundStyle(.secondary)
             }
 
+            Section("Inicio") {
+                Toggle("Abrir MycSs al iniciar sesión", isOn: Binding(
+                    get: { login.isEnabled },
+                    set: { login.set($0) }
+                ))
+                .disabled(!login.isAvailable)
+                if let message = login.message {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Restaurar valores") {
+                HStack {
+                    Button("Letras y reloj") { SettingsReset.reset([.lyrics]) }
+                    Button("Notch") { SettingsReset.reset([.notch]) }
+                    Button("Todo") { SettingsReset.reset([.lyrics, .notch]) }
+                    Spacer()
+                    if undo.canUndo {
+                        Button("Deshacer") { undo.undo() }
+                    }
+                }
+                Text("""
+                Vuelve a los valores de fábrica de la apariencia de las letras, el reloj \
+                y el notch. No toca tus estilos guardados, el atajo ni la energía, y \
+                «Deshacer» lo deja como estaba.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
             Section("Pantalla de bloqueo") {
                 Toggle("Mostrar letras al bloquear la Mac", isOn: $settings.overlayEnabled)
 
@@ -464,6 +498,7 @@ struct GeneralSettingsPage: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear { login.refresh() }
     }
 }
 
@@ -564,6 +599,8 @@ struct ClockSettingsPage: View {
 // MARK: - About
 
 struct AboutSettingsPage: View {
+    @Bindable var updates = UpdateChecker.shared
+
     var body: some View {
         VStack(spacing: 14) {
             Spacer()
@@ -571,10 +608,12 @@ struct AboutSettingsPage: View {
                 .frame(width: 180, height: 180)
             Text("MycSs")
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
-            Text("Versión \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+            Text("Versión \(AppVersion.display)")
                 .foregroundStyle(.secondary)
             Text("Una capa creativa para tu Mac, por Frenkiieeee.")
                 .foregroundStyle(.secondary)
+
+            updateRow
 
             HStack {
                 Button("Permisos de Automatización…") {
@@ -583,17 +622,47 @@ struct AboutSettingsPage: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                Button("Salir de MycSs", role: .destructive) { NSApp.terminate(nil) }
                 Button("Abrir el registro") {
                     NSWorkspace.shared.open(URL(fileURLWithPath:
                         NSHomeDirectory() + "/Library/Logs/MycSs.log"))
                 }
+                Button("GitHub") {
+                    if let url = URL(string: AppVersion.repository) { NSWorkspace.shared.open(url) }
+                }
             }
             .padding(.top, 8)
+
+            Button("Salir de MycSs", role: .destructive) { NSApp.terminate(nil) }
             Spacer()
         }
         .frame(maxWidth: .infinity)
         .padding()
+    }
+
+    /// The button that asks GitHub for the latest release, and what it answered.
+    @ViewBuilder
+    private var updateRow: some View {
+        VStack(spacing: 6) {
+            switch updates.state {
+            case .idle, .upToDate, .failed:
+                Button("Buscar actualizaciones") { updates.check() }
+            case .checking:
+                ProgressView().controlSize(.small)
+            case .available(let version, let url):
+                Button("Descargar \(version)") { NSWorkspace.shared.open(url) }
+                    .buttonStyle(.borderedProminent)
+            }
+            switch updates.state {
+            case .upToDate:
+                Text("Tienes la última versión.").font(.callout).foregroundStyle(.secondary)
+            case .available(let version, _):
+                Text("Hay una versión nueva: \(version).").font(.callout).foregroundStyle(.secondary)
+            case .failed(let reason):
+                Text(reason).font(.callout).foregroundStyle(.secondary)
+            default:
+                EmptyView()
+            }
+        }
     }
 }
 
