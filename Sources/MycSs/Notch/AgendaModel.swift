@@ -79,7 +79,7 @@ final class AgendaModel {
     @ObservationIgnored private var observer: NSObjectProtocol?
     @ObservationIgnored private let isDemo: Bool
 
-    init(demo: Bool = CommandLine.arguments.contains("--demo")) {
+    init(demo: Bool = DemoFlags.isDemo) {
         isDemo = demo
     }
 

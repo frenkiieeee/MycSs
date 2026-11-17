@@ -40,7 +40,7 @@ final class ClipboardModel {
     @ObservationIgnored private var lastCount = NSPasteboard.general.changeCount
     @ObservationIgnored private let isDemo: Bool
 
-    init(demo: Bool = CommandLine.arguments.contains("--demo")) {
+    init(demo: Bool = DemoFlags.isDemo) {
         isDemo = demo
         if demo {
             entries = ["https://github.com/frenkiieeee", "El notch ya muestra el volumen", "swift build -c release"]

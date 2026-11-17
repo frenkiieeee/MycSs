@@ -13,7 +13,7 @@ final class NotchServices {
     let clipboard: ClipboardModel
     let notifications: NotificationsModel
 
-    init(demo: Bool = CommandLine.arguments.contains("--demo")) {
+    init(demo: Bool = DemoFlags.isDemo) {
         agenda = AgendaModel(demo: demo)
         shelf = ShelfModel()
         reminders = RemindersModel(demo: demo)

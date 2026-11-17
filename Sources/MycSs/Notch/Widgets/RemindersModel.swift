@@ -35,7 +35,7 @@ final class RemindersModel {
     /// How many fit in the notch.
     static let visibleCount = 3
 
-    init(demo: Bool = CommandLine.arguments.contains("--demo")) {
+    init(demo: Bool = DemoFlags.isDemo) {
         isDemo = demo
     }
 
