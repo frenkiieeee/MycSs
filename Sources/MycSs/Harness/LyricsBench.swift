@@ -161,9 +161,10 @@ enum LyricsBench {
                         track.artist = song.artist
                         track.album = song.album
                         track.durationSec = song.seconds
-                        async let lrclib = LRCLib.fetch(for: track)
-                        async let netease = NetEase.fetch(for: track)
-                        async let qq = QQMusic.fetch(for: track)
+                        let query = track
+                        async let lrclib = LRCLib.fetch(for: query)
+                        async let netease = NetEase.fetch(for: query)
+                        async let qq = QQMusic.fetch(for: query)
                         let (l, n, q) = await (lrclib, netease, qq)
                         return (i, l != nil, n != nil && n!.wordTimingQuality != .real,
                                 n?.wordTimingQuality == .real, q != nil)

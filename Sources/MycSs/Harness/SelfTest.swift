@@ -4,16 +4,29 @@ import Foundation
 ///
 /// Run it as:  ./MycSs.app/Contents/MacOS/MycSs --selftest
 ///
-/// It exercises the pieces that depend on the outside world — the AppleScript
+/// It exercises the pieces that depend on the outside world, the AppleScript
 /// reader against the running Spotify app, the lock state, and the SkyLight
-/// Space lookup — and prints the values so they can be compared by hand.
+/// Space lookup, and prints the values so they can be compared by hand.
 enum SelfTest {
 
     private static let source = SpotifySource()
 
+    /// The checks that need no Spotify, no permission and no network. Used by CI.
+    static func runPure() async {
+        print("== MycSs self test (pure) ==")
+        await SelfTest.testParsers()
+        SelfTest.testVersioning()
+        print("\n== done ==")
+    }
+
     static func run() async {
         print("== MycSs self test ==")
         print("platform: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+
+        // 0. What needs no Spotify, no permission and no network goes first, so a
+        // stuck permission prompt cannot hide it.
+        await SelfTest.testParsers()
+        SelfTest.testVersioning()
 
         // 1. AppleScript reader against the live Spotify app.
         let state = SelfTest.readTrack()
@@ -39,18 +52,18 @@ enum SelfTest {
         print("\n-- AppleMusicSource and PlayerHub --")
         let music = AppleMusicSource()
         let hub = PlayerHub()
-        let musicSemaphore = DispatchSemaphore(value: 0)
-        music.readPosition { snapshot in
-            print("  music:   playing=\(snapshot.isPlaying) title='\(snapshot.title)' position=\(String(format: "%.2f", snapshot.positionSec)) latency=\(String(format: "%.1f", snapshot.latency * 1000)) ms")
-            musicSemaphore.signal()
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            music.readPosition { snapshot in
+                print("  music:   playing=\(snapshot.isPlaying) title='\(snapshot.title)' position=\(String(format: "%.2f", snapshot.positionSec)) latency=\(String(format: "%.1f", snapshot.latency * 1000)) ms")
+                done.resume()
+            }
         }
-        musicSemaphore.wait()
-        let hubSemaphore = DispatchSemaphore(value: 0)
-        hub.readPosition { snapshot in
-            print("  hub:     follows \(hub.id.rawValue), title='\(snapshot.title)'")
-            hubSemaphore.signal()
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            hub.readPosition { snapshot in
+                print("  hub:     follows \(hub.id.rawValue), title='\(snapshot.title)'")
+                done.resume()
+            }
         }
-        hubSemaphore.wait()
 
         // 1b2. Who macOS thinks this app is. A permission is tied to this.
         print("\n-- App identity --")
@@ -101,12 +114,6 @@ enum SelfTest {
         let space = SkyLight.shared.newLockSpace()
         print("  new lock space: \(space.map(String.init) ?? "none")")
         print("  spaces: \(SkyLight.shared.describeSpaces())")
-
-        // 5. How stale is the reading really?
-        LatencyProbe.run()
-
-        // 6. Parser checks against the real formats.
-        await SelfTest.testParsers()
 
         // 6. Live lyric fetch for whatever is playing right now.
         await SelfTest.testProviders()
@@ -221,6 +228,27 @@ enum SelfTest {
                 print("  (words: \(line.words.count))")
             }
         }
+    }
+
+    // MARK: - Versioning
+
+    private static func testVersioning() {
+        print("\n-- Versioning --")
+        let parsed = AppVersion.Semantic("v1.2.3")
+        let ok = parsed.map { ($0.major, $0.minor, $0.patch) == (1, 2, 3) } ?? false
+        print(ok ? "  OK: v1.2.3 parsed" : "  !! FAIL: v1.2.3 not parsed")
+        let order = AppVersion.Semantic("0.2.5")! < AppVersion.Semantic("0.10.0")!
+            && AppVersion.Semantic("1.0.0")! > AppVersion.Semantic("0.99.99")!
+        print(order ? "  OK: versions compare as numbers, not as text" : "  !! FAIL: versions compare wrong")
+        let beta = AppVersion.Semantic("1.0.0-beta.1")
+        print(beta?.major == 1 ? "  OK: a pre-release suffix is ignored" : "  !! FAIL: pre-release not parsed")
+        let newer = UpdateChecker.interpret(Data(#"{"tag_name":"v9.0.0","html_url":"https://example.com/r"}"#.utf8), current: "0.2.5")
+        let same = UpdateChecker.interpret(Data(#"{"tag_name":"v0.2.5"}"#.utf8), current: "0.2.5")
+        let broken = UpdateChecker.interpret(Data("nope".utf8), current: "0.2.5")
+        var updatesOK = same == .upToDate
+        if case .available = newer {} else { updatesOK = false }
+        if case .failed = broken {} else { updatesOK = false }
+        print(updatesOK ? "  OK: the release check tells newer, same and broken apart" : "  !! FAIL: release check wrong")
     }
 
     // MARK: - Providers
