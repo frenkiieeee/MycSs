@@ -17,7 +17,7 @@ final class NotchSettingsNav {
             case .styles: return "Estilos"
             case .look: return "Aspecto"
             case .music: return "Música"
-            case .indicators: return "Volumen"
+            case .indicators: return "Teclas"
             case .widgets: return "Widgets"
             case .system: return "Sistema"
             }
@@ -60,6 +60,7 @@ struct NotchSettingsPage: View {
                     music
                 case .indicators:
                     indicators
+                    keyboardLight
                 case .widgets:
                     widgets
                     notifications
@@ -205,7 +206,7 @@ struct NotchSettingsPage: View {
             La barra, el deslizador, el anillo y el número viajan de un valor al siguiente \
             con un muelle, sin saltos: «Cuenta paso a paso» pasa por cada número, «Dígitos que \
             ruedan» los hace girar y «Oculto» quita el número. Prueba los cambios con los botones \
-            + y − de la vista previa, en «Volumen» o «Brillo».
+            + y − de la vista previa, en «Volumen», «Brillo» o «Teclado».
             """)
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -242,6 +243,54 @@ struct NotchSettingsPage: View {
             .foregroundStyle(.secondary)
         }
     }
+
+    /// The shortcut that moves the keyboard light (spec 011).
+    private var keyboardLight: some View {
+        Section("Luz del teclado") {
+            Toggle("Subir y bajar la luz del teclado con un atajo", isOn: $settings.keyboardLightEnabled)
+                .disabled(!keyboardLightAvailable)
+
+            if keyboardLightAvailable {
+                LabeledContent("Subir") {
+                    ChordRecorder(chord: settings.keyboardLightUp) { settings.keyboardLightUp = $0 }
+                        .frame(width: 150, height: 26)
+                }
+                LabeledContent("Bajar") {
+                    ChordRecorder(chord: settings.keyboardLightDown) { settings.keyboardLightDown = $0 }
+                        .frame(width: 150, height: 26)
+                }
+                .disabled(!settings.keyboardLightEnabled)
+
+                HStack {
+                    Button("Restaurar ⌥F2 y ⌥F1") { settings.resetKeyboardLightShortcuts() }
+                        .disabled(settings.keyboardLightUp == KeyboardLightDirection.defaultUp
+                                  && settings.keyboardLightDown == KeyboardLightDirection.defaultDown)
+                    Spacer()
+                    Text(accessibility.isTrusted ? "Accesibilidad concedida" : "Falta Accesibilidad")
+                        .font(.callout)
+                        .foregroundStyle(accessibility.isTrusted ? Color.green : Color.orange)
+                }
+                .disabled(!settings.keyboardLightEnabled)
+            } else {
+                Text("Este Mac no tiene luz de teclado que MycSs pueda mover.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("""
+            Por defecto, **⌥F2** sube la luz y **⌥F1** la baja, en pasos de 1/16, y el cambio sale en \
+            el notch con el mismo indicador del volumen y el brillo (su estilo, número y animación \
+            son los de arriba; en el bloqueo, la animación que elijas en «Apariencia»). Pulsa un \
+            atajo y teclea otro para cambiarlo; con las teclas de brillo vale también. Mientras \
+            esté activo, ⌥F1 y ⌥F2 ya no abren los ajustes de Pantallas. Necesita Accesibilidad, \
+            igual que el volumen y el brillo, y el notch encendido.
+            """)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var keyboardLightAvailable: Bool { KeyboardBacklight.isAvailable }
 
     private var widgets: some View {
         Section("Widgets de la derecha") {

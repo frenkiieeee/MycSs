@@ -6,6 +6,22 @@ All notable changes to MycSs are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- A shortcut of its own for the keyboard light: Option+F2 raises it and Option+F1
+  lowers it (it works with the brightness keys or with plain F keys). Each shortcut
+  can be recorded again, cleared or restored. The change shows in the notch, and on
+  the lock screen, with the volume and brightness indicator (same style, numbers and
+  motion) and its own icon, a keyboard with rays of light. It needs Accessibility and
+  a Mac with a keyboard light; Notch settings, tab "Teclas".
+- The volume and brightness indicator also shows on the lock screen (top right),
+  where the notch is hidden, in the same style, numbers and motion as the notch. It
+  can be turned off and has six animations (fade, slide, grow, pop, drop, blur).
+
+### Changed
+- With the notch open, a new song animates: the cover fades in over the old one
+  with a small beat, and the title and artist are replaced with the song change
+  animation (also for songs skipped in a row).
+
 ## [0.2.5] - 2026-11-16
 
 First packaged release: installable from a disk image, a script or Homebrew.

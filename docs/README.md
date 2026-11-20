@@ -25,6 +25,7 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 1c | Cambio de canción animado, con y sin letra | [008](specs/008-song-transition.md) |
 | 4b | Crear eventos y recordatorios desde el notch | [009](specs/009-quick-add.md) |
 | 5 | Versión, DMG, Homebrew, ajustes ordenados y restaurar | [010](specs/010-release-and-settings.md) |
+| 4c | Luz del teclado con un atajo propio (⌥F2 y ⌥F1) | [011](specs/011-keyboard-light.md) |
 | 6 | Notarización con Developer ID | pendiente |
 
 ## Cómo usarlos con agentes

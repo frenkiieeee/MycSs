@@ -4,11 +4,13 @@ import CoreAudio
 import Foundation
 import CoreGraphics
 
-/// What the notch shows when the volume or the brightness changes.
+/// What the notch shows when the volume, the brightness or the keyboard light changes.
 struct NotchHUD: Equatable {
     enum Kind: Equatable {
         case volume
         case brightness
+        /// The light of the keyboard.
+        case keyboard
     }
     var kind: Kind
     /// From 0 to 1.
@@ -255,6 +257,9 @@ final class MediaKeyTap {
     var isActive: () -> Bool = { true }
     /// The display whose brightness the brightness keys move.
     var brightnessDisplay: CGDirectDisplayID = CGMainDisplayID()
+    /// While a shortcut is being recorded, every key that could be one comes here
+    /// (with its modifiers and what it types) instead of acting.
+    var recorder: ((_ code: Int, _ modifiers: Int, _ character: String) -> Void)?
 
     private var port: CFMachPort?
     private var source: CFRunLoopSource?
@@ -274,8 +279,11 @@ final class MediaKeyTap {
         guard port == nil else { return true }
         guard Self.isTrusted else { return false }
 
-        // `NX_SYSDEFINED` (14): where the volume and brightness keys arrive.
-        let mask: CGEventMask = 1 << 14
+        // `NX_SYSDEFINED` (14): where the volume and brightness keys arrive. The
+        // ordinary key events are for the keyboard light shortcut, in the keyboard
+        // mode where F1 and F2 are plain keys, and for the shortcuts the user records.
+        let mask: CGEventMask = (1 << 14)
+            | (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
         guard let port = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
@@ -328,18 +336,30 @@ final class MediaKeyTap {
             if let port { CGEvent.tapEnable(tap: port, enable: true) }
             return pass
         }
+        if type == .keyDown || type == .keyUp { return handleKey(type: type, event: event) }
+
         guard type.rawValue == 14,
               let ns = NSEvent(cgEvent: event),
               ns.type == .systemDefined,
-              ns.subtype.rawValue == 8,
-              isActive()
+              ns.subtype.rawValue == 8
         else { return pass }
 
         let data = ns.data1
         let code = (data & 0xFFFF_0000) >> 16
         let flags = data & 0x0000_FFFF
         let isDown = ((flags & 0xFF00) >> 8) == 0xA
-        guard let key = Key(rawValue: code) else { return pass }
+        let modifiers = KeyChord.modifiers(event.flags)
+
+        // A media key is the F key it stands for, so a shortcut made of it (the
+        // default ⌥F2) is looked at before the volume and brightness keys are.
+        if let function = KeyChord.functionKey(forMediaKey: code) {
+            switch shortcut(code: function, modifiers: modifiers, isDown: isDown, character: "") {
+            case .swallow: return nil
+            case .ignore: break
+            }
+        }
+
+        guard AppSettings.shared.notchHUD, isActive(), let key = Key(rawValue: code) else { return pass }
 
         // Option and Shift together move by a quarter step, like in macOS.
         let fine = ns.modifierFlags.contains(.option) && ns.modifierFlags.contains(.shift)
@@ -359,6 +379,58 @@ final class MediaKeyTap {
         DispatchQueue.main.async { [weak self] in self?.onChange?(hud) }
         return nil
     }
+
+    // MARK: - The keyboard light shortcut
+
+    private enum Outcome { case swallow, ignore }
+
+    /// Ordinary keys: the shortcut of the keyboard light with F1 and F2 as plain keys,
+    /// or any combination the user recorded.
+    private func handleKey(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        let pass = Unmanaged.passUnretained(event)
+        let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        let modifiers = KeyChord.modifiers(event.flags)
+        let isDown = type == .keyDown
+
+        // Typing never gets here: only an F key or a key with a modifier is looked at.
+        // A release is always looked at: the modifier may be let go before the key.
+        guard !isDown || KeyChord.isValid(code: code, modifiers: modifiers) else { return pass }
+        let character = isDown ? (NSEvent(cgEvent: event)?.charactersIgnoringModifiers ?? "") : ""
+        switch shortcut(code: code, modifiers: modifiers, isDown: isDown, character: character) {
+        case .swallow: return nil
+        case .ignore: return pass
+        }
+    }
+
+    /// A shortcut being recorded, or one of the keyboard light. It says whether the
+    /// key was used (and so must not reach the system).
+    private func shortcut(code: Int, modifiers: Int, isDown: Bool, character: String) -> Outcome {
+        if let recorder {
+            // The release of a key that was recorded is taken too.
+            if !isDown { return takenLight.remove(code) != nil ? .swallow : .ignore }
+            guard KeyChord.isValid(code: code, modifiers: modifiers) else { return .ignore }
+            takenLight.insert(code)
+            DispatchQueue.main.async { recorder(code, modifiers, character) }
+            return .swallow
+        }
+
+        let settings = AppSettings.shared
+        guard settings.keyboardLightEnabled else { return .ignore }
+        guard isDown else { return takenLight.remove(code) != nil ? .swallow : .ignore }
+        guard let direction = KeyboardLightDirection.direction(
+            code: code, modifiers: modifiers, up: settings.keyboardLightUp, down: settings.keyboardLightDown
+        ) else { return .ignore }
+
+        // No light on this Mac: the key is left to the system.
+        guard let level = KeyboardBacklight.step(up: direction == .up) else { return .ignore }
+        takenLight.insert(code)
+        let hud = NotchHUD(kind: .keyboard, value: level)
+        DispatchQueue.main.async { [weak self] in self?.onChange?(hud) }
+        return .swallow
+    }
+
+    /// The keys whose press was used as a shortcut, so their release is taken too.
+    private var takenLight: Set<Int> = []
 
     /// The keys whose last press this tap took, so their release is taken too.
     private var taken: Set<Int> = []

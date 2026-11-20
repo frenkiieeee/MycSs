@@ -32,6 +32,10 @@ extension AppDelegate {
                 controller?.snapshot(to: "\(prefix)-hud-volume.png", .hud(volume))
                 controller?.snapshot(to: "\(prefix)-hud-brightness.png",
                                      .hud(NotchHUD(kind: .brightness, value: 0.85)))
+                controller?.snapshot(to: "\(prefix)-hud-keyboard.png",
+                                     .hud(NotchHUD(kind: .keyboard, value: 0.7)))
+                controller?.snapshot(to: "\(prefix)-hud-keyboard-off.png",
+                                     .hud(NotchHUD(kind: .keyboard, value: 0)))
                 controller?.snapshot(to: "\(prefix)-open-volume.png", .openWithHUD(volume))
                 for widget in AppSettings.NotchWidget.allCases {
                     controller?.snapshot(to: "\(prefix)-widget-\(widget.rawValue).png", .widget(widget))

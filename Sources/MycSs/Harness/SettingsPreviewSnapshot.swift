@@ -174,6 +174,21 @@ enum SettingsPreviewSnapshot {
                 print("settings snapshot: style key lists and reset: \(coherent ? "OK" : "!! FAILED")")
             }
 
+            // The volume indicator on the lock screen and the lyrics (the notch is hidden there).
+            do {
+                let m = OverlayPreview.model
+                let source = NotchModel()
+                m.hudSource = source
+                m.startPreview()
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                source.showHUD(NotchHUD(kind: .volume, value: 0.62), for: 30)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                write(OverlayPreviewCard(), "\(prefix)-overlay-hud.png", width: 440)
+                print("settings snapshot: overlay indicator: \(source.hud != nil ? "OK" : "!! FAILED")")
+                m.hudSource = nil
+                m.stopPreview()
+            }
+
             let viewedAfter = UserDefaults.standard.dictionaryRepresentation().filter { $0.key.hasPrefix("notch") || $0.key.hasPrefix("clock") }
             print("settings snapshot: viewing a style does not apply it: \(NSDictionary(dictionary: viewedBefore).isEqual(to: viewedAfter) ? "OK" : "!! FAILED")")
 

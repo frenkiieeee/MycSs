@@ -75,10 +75,7 @@ struct ClosedNotch: View {
         switch layout.kind {
         case .hud:
             if let hud = notch.hud {
-                Image(systemName: hud.symbol, variableValue: Double(notch.hudShown))
-                    .font(.system(size: 15 * NotchGeometry.closedText, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .contentTransition(.symbolEffect(.replace))
+                HUDIcon(hud: hud, shown: notch.hudShown, size: 15 * NotchGeometry.closedText)
                     .transition(AppSettings.shared.notchHUDEntrance.transition)
             }
         case .notification:

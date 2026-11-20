@@ -19,7 +19,7 @@
 ## What it does
 
 - **Lyrics on the lock screen** for Spotify and Apple Music, highlighted word by word, with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (shortcut ⌃⌥L, menu bar, or after idle time).
-- **A notch** with cover and visualiser, the title on song change, a volume and brightness indicator, notifications, a file shelf and widgets (calendar, reminders, timer, system, clipboard). It can show on other screens too.
+- **A notch** with cover and visualiser, the title on song change, a volume, brightness and keyboard light indicator (the light has its own shortcut, Option+F2 and Option+F1, which you can change), notifications, a file shelf and widgets (calendar, reminders, timer, system, clipboard). It can show on other screens too.
 - **Customisable**: fonts, highlight effect, clock, backgrounds, animations, notch size and motion. Everything is saved as **styles** you can preview before applying.
 
 ## Requirements
@@ -45,7 +45,7 @@ After an update macOS may ask again for Accessibility and Full Disk Access.
 | Permission | Used for | Required |
 |---|---|---|
 | Automation (Spotify, Music) | Reading the current song | Yes |
-| Accessibility | Volume and brightness keys in the notch | No |
+| Accessibility | Volume and brightness keys in the notch, and the keyboard light shortcut | No |
 | Full Disk Access | Showing other apps' notifications in the notch | No |
 | Calendars, Reminders | The calendar and reminders widgets | No |
 | System audio | A visualiser that follows the real rhythm | No |

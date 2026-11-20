@@ -156,6 +156,10 @@ struct OverlayPreview: View {
     @MainActor
     static let model = LyricsViewModel(demo: true)
 
+    /// The notch model that holds the volume indicator the preview shows.
+    @MainActor
+    static let hudDemo = NotchModel()
+
     @Bindable var revision = SettingsRevision.shared
     /// Whether this preview plays the clock going away and coming back.
     var clockCycle = false
@@ -190,6 +194,7 @@ struct OverlayPreview: View {
 
     @MainActor private static func attach(clockCycle: Bool) {
         users += 1
+        model.hudSource = hudDemo
         model.previewClockCycle = clockCycle
         model.startPreview()
         // The picture renderer shows a view only to draw it once: no entrance.
@@ -247,6 +252,14 @@ struct OverlayPreviewCard: View {
                     OverlayPreview.model.previewNextSong()
                 }
 
+                if showsEntranceButton {
+                    Button("Probar indicador") {
+                        let next = Float(Int.random(in: 15...95)) / 100
+                        let kind = [NotchHUD.Kind.volume, .brightness, .keyboard].randomElement() ?? .volume
+                        OverlayPreview.hudDemo.showHUD(NotchHUD(kind: kind, value: next), for: 2.2)
+                    }
+                }
+
                 if showsEntranceButton || clockCycle {
                     Button(clockCycle ? "Repetir" : "Ver la entrada") {
                         OverlayPreview.model.replayEntrance()
@@ -268,7 +281,7 @@ struct OverlayPreviewCard: View {
 
 /// Which moment of the notch the preview shows.
 enum NotchPreviewScene: String, CaseIterable, Identifiable {
-    case closed, peek, open, volume, brightness, notification, timer
+    case closed, peek, open, volume, brightness, keyboard, notification, timer
 
     var id: String { rawValue }
 
@@ -279,6 +292,7 @@ enum NotchPreviewScene: String, CaseIterable, Identifiable {
         case .open: return "Abierto"
         case .volume: return "Volumen"
         case .brightness: return "Brillo"
+        case .keyboard: return "Teclado"
         case .notification: return "Aviso"
         case .timer: return "Temporizador"
         }
@@ -335,6 +349,7 @@ final class NotchPreviewState {
             case .open: notch.open(tab: .home)
             case .volume: step(0, kind: .volume)
             case .brightness: step(0, kind: .brightness)
+            case .keyboard: step(0, kind: .keyboard)
             case .timer: services.timer.start(minutes: 5)
             case .notification:
                 notch.showNotification(NotchNotification(
@@ -342,6 +357,16 @@ final class NotchPreviewState {
                     subtitle: "", body: "¿Comemos hoy? Te espero en la plaza", date: Date()
                 ), for: 4)
             }
+        }
+    }
+
+    /// What the + and - buttons move: the keyboard light in its scene, the brightness
+    /// in its own, the volume in the rest.
+    var hudKind: NotchHUD.Kind {
+        switch scene {
+        case .brightness: return .brightness
+        case .keyboard: return .keyboard
+        default: return .volume
         }
     }
 
@@ -433,13 +458,13 @@ struct NotchPreviewCard: View {
             .frame(maxWidth: 640)
 
             HStack(spacing: 10) {
-                Button { state.step(-0.1, kind: state.scene == .brightness ? .brightness : .volume) } label: {
+                Button { state.step(-0.1, kind: state.hudKind) } label: {
                     Image(systemName: "minus")
                 }
                 Text("Bajar o subir para ver el indicador")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button { state.step(0.1, kind: state.scene == .brightness ? .brightness : .volume) } label: {
+                Button { state.step(0.1, kind: state.hudKind) } label: {
                     Image(systemName: "plus")
                 }
             }

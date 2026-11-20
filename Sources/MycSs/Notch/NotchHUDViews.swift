@@ -8,12 +8,67 @@ extension NotchHUD {
         switch kind {
         case .volume: return muted || value <= 0 ? "speaker.slash.fill" : "speaker.wave.3.fill"
         case .brightness: return "sun.max.fill"
+        case .keyboard: return "keyboard.fill"
+        }
+    }
+
+    /// What it is called.
+    var title: String {
+        switch kind {
+        case .volume: return "Volumen"
+        case .brightness: return "Brillo"
+        case .keyboard: return "Luz del teclado"
         }
     }
 
         /// What the bar shows: nothing when muted.
     var shown: CGFloat { shownValue }
     var percent: Int { Int((shown * 100).rounded()) }
+}
+
+/// The icon of the indicator: the speaker, the sun, or a keyboard with rays of light.
+struct HUDIcon: View {
+    let hud: NotchHUD
+    let shown: CGFloat
+    var size: CGFloat = 15
+
+    var body: some View {
+        switch hud.kind {
+        case .keyboard:
+            KeyboardLightIcon(level: shown, size: size)
+        case .volume, .brightness:
+            Image(systemName: hud.symbol, variableValue: Double(shown))
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.white)
+                .contentTransition(.symbolEffect(.replace))
+        }
+    }
+}
+
+/// A keyboard with rays of light over it. The rays grow and brighten with the
+/// level and go out at zero, so the icon says "keyboard" and shows how lit it is.
+struct KeyboardLightIcon: View {
+    /// From 0 to 1; it travels with the indicator, so the rays glide too.
+    let level: CGFloat
+    let size: CGFloat
+
+    var body: some View {
+        let lit = min(max(level, 0), 1)
+        ZStack {
+            Image(systemName: "keyboard.fill")
+                .font(.system(size: size * 1.2, weight: .semibold))
+                .foregroundStyle(.white)
+                .offset(y: size * 0.36)
+            Image(systemName: lit < 0.05 ? "light.min" : "light.max")
+                .font(.system(size: size * 0.92, weight: .bold))
+                .foregroundStyle(.white)
+                .opacity(0.2 + 0.8 * lit)
+                .scaleEffect(0.82 + 0.28 * lit, anchor: .bottom)
+                .offset(y: -size * 0.42)
+        }
+        .frame(width: size * 1.75, height: size * 1.6)
+        .accessibilityLabel("Luz del teclado")
+    }
 }
 
 /// The volume or brightness as a thin bar.

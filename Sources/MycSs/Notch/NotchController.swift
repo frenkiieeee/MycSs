@@ -57,6 +57,16 @@ final class NotchController {
         self.model = model
     }
 
+    /// The overlay only gets the indicator while the screen is locked.
+    private func setOverlayHUD(_ on: Bool) {
+        let wanted: NotchModel? = on ? notch : nil
+        if model.hudSource !== wanted { model.hudSource = wanted }
+    }
+
+    /// Whether only the volume and brightness indicator is running (screen locked): the
+    /// notch is hidden, the overlay draws the indicator.
+    private var hudOnly = false
+
     // MARK: - Lifecycle
 
     /// Called a dozen times a second by the app's timer.
@@ -64,6 +74,7 @@ final class NotchController {
         let wanted = (AppSettings.shared.notchEnabled || isSelfTesting) && !locked && !overlayVisible
 
         if wanted {
+            setOverlayHUD(false)
             if panel == nil { enable() }
             syncOpenState()
             if !isSelfTesting { updateListening() }
@@ -73,9 +84,57 @@ final class NotchController {
             updateKeys()
             updateAudio()
             if !isSelfTesting { reconcilePointer() }
-        } else if panel != nil {
-            Log.line("notch: hiding (locked: \(locked), overlay: \(overlayVisible), enabled: \(AppSettings.shared.notchEnabled))")
-            disable()
+        } else {
+            // Locked: the notch goes, but the volume and brightness indicator stays, drawn by
+            // the overlay. Over the desktop (the lyrics as a screensaver) it does not.
+            let keepHUD = AppSettings.shared.notchEnabled && AppSettings.shared.notchHUD
+                && AppSettings.shared.lockHUD && locked && !isSelfTesting
+            if panel != nil {
+                Log.line("notch: hiding (locked: \(locked), overlay: \(overlayVisible), enabled: \(AppSettings.shared.notchEnabled))")
+                disable(keepHUD: keepHUD)
+            }
+            setOverlayHUD(keepHUD)
+            if keepHUD {
+                runHUDOnly()
+            } else if hudOnly {
+                stopHUDOnly()
+            }
+        }
+    }
+
+    /// Keeps the volume watcher and the media keys going while the notch is hidden.
+    private func runHUDOnly() {
+        if !hudOnly {
+            hudOnly = true
+            Log.line("hud: showing the indicator on the lock screen and the lyrics")
+        }
+        wireHUD()
+        volumeWatcher.start()
+        updateKeys()
+    }
+
+    private func stopHUDOnly() {
+        hudOnly = false
+        volumeWatcher.stop()
+        MediaKeyTap.shared.uninstall()
+        notch.reset()
+    }
+
+    /// Connects the volume watcher and the media keys to the indicator.
+    private func wireHUD() {
+        volumeWatcher.onChange = { [weak self] hud in
+            // **Only when the keys are taken.** Without the Accessibility
+            // permission the system draws its own indicator, and drawing ours too
+            // would show the volume twice. When the keys are taken, this still
+            // catches the changes that do not come from the keys (the Control
+            // Centre slider, the headphones), which have no system indicator.
+            guard AppSettings.shared.notchHUD, MediaKeyTap.shared.isInstalled else { return }
+            self?.notch.showHUD(hud)
+        }
+        MediaKeyTap.shared.brightnessDisplay = displayID
+        MediaKeyTap.shared.isActive = { [weak self] in self?.panel != nil || self?.hudOnly == true }
+        MediaKeyTap.shared.onChange = { [weak self] hud in
+            self?.notch.showHUD(hud)
         }
     }
 
@@ -144,32 +203,20 @@ final class NotchController {
             return self.currentZone(padding: 10, display: openOn).contains(NSEvent.mouseLocation)
         }
 
-        // The volume, whoever changes it.
-        volumeWatcher.onChange = { [weak self] hud in
-            // **Only when the keys are taken.** Without the Accessibility
-            // permission the system draws its own indicator, and drawing ours too
-            // would show the volume twice. When the keys are taken, this still
-            // catches the changes that do not come from the keys (the Control
-            // Centre slider, the headphones), which have no system indicator.
-            guard AppSettings.shared.notchHUD, MediaKeyTap.shared.isInstalled else { return }
-            self?.notch.showHUD(hud)
-        }
+        // The volume and the keys.
+        hudOnly = false
+        wireHUD()
         volumeWatcher.start()
-
-        // The keys: only taken while the notch is on screen.
-        MediaKeyTap.shared.brightnessDisplay = id
-        MediaKeyTap.shared.isActive = { [weak self] in self?.panel != nil }
-        MediaKeyTap.shared.onChange = { [weak self] hud in
-            self?.notch.showHUD(hud)
-        }
         Log.line("notch: shown on display \(id), cut-out \(Int(geometry.notch.width))x\(Int(geometry.notch.height))")
     }
 
-    private func disable() {
-        volumeWatcher.stop()
+    private func disable(keepHUD: Bool = false) {
+        if !keepHUD {
+            volumeWatcher.stop()
+            MediaKeyTap.shared.uninstall()
+        }
         services.notifications.stop()
         services.clipboard.stop()
-        MediaKeyTap.shared.uninstall()
         AudioReactor.shared.stop()
         model.setNotchActive(false)
         model.notchExpanded = false
@@ -251,12 +298,14 @@ final class NotchController {
 
     // MARK: - Volume and brightness keys
 
-    /// Takes the keys when the setting is on and the permission is there; gives
-    /// them back otherwise. Without the permission the volume is still shown in
-    /// the notch (by `VolumeWatcher`), next to the system's own indicator.
+    /// Takes the keys when a setting asks for them (the volume and brightness in the
+    /// notch, or the keyboard light shortcut) and the permission is there; gives them
+    /// back otherwise. Without the permission the volume is still shown in the notch
+    /// (by `VolumeWatcher`), next to the system's own indicator.
     private func updateKeys() {
         let tap = MediaKeyTap.shared
-        guard AppSettings.shared.notchHUD else {
+        let settings = AppSettings.shared
+        guard settings.notchHUD || (settings.keyboardLightEnabled && KeyboardBacklight.isAvailable) else {
             if tap.isInstalled { tap.uninstall() }
             return
         }

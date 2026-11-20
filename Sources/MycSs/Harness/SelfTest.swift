@@ -16,6 +16,7 @@ enum SelfTest {
         print("== MycSs self test (pure) ==")
         await SelfTest.testParsers()
         SelfTest.testVersioning()
+        SelfTest.testKeyboardLightShortcut()
         print("\n== done ==")
     }
 
@@ -27,6 +28,8 @@ enum SelfTest {
         // stuck permission prompt cannot hide it.
         await SelfTest.testParsers()
         SelfTest.testVersioning()
+        SelfTest.testKeyboardLightShortcut()
+        SelfTest.testKeyboardBacklight()
 
         // 1. AppleScript reader against the live Spotify app.
         let state = SelfTest.readTrack()
@@ -249,6 +252,70 @@ enum SelfTest {
         if case .available = newer {} else { updatesOK = false }
         if case .failed = broken {} else { updatesOK = false }
         print(updatesOK ? "  OK: the release check tells newer, same and broken apart" : "  !! FAIL: release check wrong")
+    }
+
+    // MARK: - Keyboard light
+
+    /// The shortcut logic, with no hardware: what is stored, how it reads, which keys
+    /// are which, and that the modifiers have to be exactly the ones recorded.
+    private static func testKeyboardLightShortcut() {
+        print("\n-- Keyboard light shortcut --")
+        func report(_ ok: Bool, _ what: String) { print(ok ? "  OK: \(what)" : "  !! FAIL: \(what)") }
+
+        let up = KeyboardLightDirection.defaultUp, down = KeyboardLightDirection.defaultDown
+        report(up.label == "⌥F2" && down.label == "⌥F1", "the defaults read ⌥F2 and ⌥F1")
+
+        let custom = KeyChord(code: 40, modifiers: 6144, character: "k")
+        report(KeyChord(stored: custom.stored) == custom && custom.label == "⌃⌥K", "a recorded shortcut survives being stored")
+        report(KeyChord(stored: "nonsense") == nil && KeyChord(stored: "x|1") == nil, "a broken stored value is refused")
+
+        // The brightness keys (3 down, 2 up) are F1 and F2 of an Apple keyboard.
+        report(KeyChord.functionKey(forMediaKey: 3) == down.code && KeyChord.functionKey(forMediaKey: 2) == up.code,
+               "the brightness keys are F1 and F2")
+        report(KeyChord.functionKey(forMediaKey: 99) == nil, "an unknown media key is not a function key")
+
+        func which(_ code: Int, _ modifiers: Int) -> KeyboardLightDirection? {
+            KeyboardLightDirection.direction(code: code, modifiers: modifiers, up: up, down: down)
+        }
+        report(which(120, up.modifiers) == .up && which(122, up.modifiers) == .down, "⌥F2 raises and ⌥F1 lowers")
+        report(which(120, 0) == nil && which(122, 0) == nil, "plain F1 and F2 stay the screen brightness")
+        report(which(122, up.modifiers | 512) == nil, "⌥⇧F1 stays the fine step of the screen brightness")
+        report(KeyboardLightDirection.direction(code: 120, modifiers: up.modifiers, up: nil, down: nil) == nil, "a cleared shortcut does nothing")
+
+        report(KeyChord.isValid(code: 122, modifiers: 0), "an F key needs no modifier")
+        report(!KeyChord.isValid(code: 40, modifiers: 0) && !KeyChord.isValid(code: 40, modifiers: 512)
+               && KeyChord.isValid(code: 40, modifiers: 2048), "a letter needs Control, Option or Command")
+
+        // What the user had stored (nothing, or their own shortcuts), to leave it as it was.
+        let keys = [SettingKey.keyboardLightUp, SettingKey.keyboardLightDown]
+        let stored = keys.map { ($0, UserDefaults.standard.object(forKey: $0)) }
+        AppSettings.shared.keyboardLightUp = nil
+        let cleared = AppSettings.shared.keyboardLightUp == nil
+        AppSettings.shared.resetKeyboardLightShortcuts()
+        let back = AppSettings.shared.keyboardLightUp == up && AppSettings.shared.keyboardLightDown == down
+        for (key, value) in stored {
+            if let value { UserDefaults.standard.set(value, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        report(cleared && back, "clearing and restoring the shortcuts in the settings")
+    }
+
+    /// The real light of this Mac, if it has one: it is read, and the same value is
+    /// written back; then it goes up a step and returns to where it was.
+    private static func testKeyboardBacklight() {
+        print("\n-- Keyboard light (this Mac) --")
+        guard KeyboardBacklight.isAvailable, let before = KeyboardBacklight.level() else {
+            print("  no keyboard light here (or CoreBrightness changed): the shortcut stays inactive")
+            return
+        }
+        print(String(format: "  level: %.3f", before))
+        let rewrote = KeyboardBacklight.set(before)
+        let moved = KeyboardBacklight.step(up: before < 0.5)
+        let changed = moved.map { abs($0 - before) > 0.01 } ?? false
+        KeyboardBacklight.set(before)
+        let restored = KeyboardBacklight.level().map { abs($0 - before) < 0.02 } ?? false
+        print(rewrote ? "  OK: the same value is written back" : "  !! FAIL: could not write the light")
+        print(changed ? "  OK: a step moves the light" : "  !! FAIL: a step did not move the light")
+        print(restored ? "  OK: the light is back where it was" : "  !! FAIL: the light was not restored")
     }
 
     // MARK: - Providers

@@ -21,7 +21,7 @@
 
 **Letras en la pantalla de bloqueo.** Al bloquear la Mac aparece la letra de la canción que suena en Spotify o Apple Music, resaltada **palabra a palabra** al ritmo de la voz, con la portada, un reloj y un fondo animado que toma los colores del álbum. También se abre como salvapantallas con un atajo (por defecto ⌃⌥L), desde el menú de la barra o tras un rato sin usar la Mac.
 
-**Un notch con música y widgets.** El notch muestra la portada y un visualizador mientras suena algo, el título al cambiar de canción, el volumen y el brillo, las notificaciones, y se abre con el puntero hasta un panel con el reproductor y widgets: calendario, recordatorios, temporizador, batería y sistema, portapapeles y una estantería para archivos. También sale en otras pantallas.
+**Un notch con música y widgets.** El notch muestra la portada y un visualizador mientras suena algo, el título al cambiar de canción, el volumen, el brillo y la luz del teclado (con un atajo propio, ⌥F2 y ⌥F1, que puedes cambiar), las notificaciones, y se abre con el puntero hasta un panel con el reproductor y widgets: calendario, recordatorios, temporizador, batería y sistema, portapapeles y una estantería para archivos. También sale en otras pantallas.
 
 **Tuyo hasta el último detalle.** Fuente y efecto de resaltado, reloj (que puede ocultarse solo), fondos, animaciones de entrada y de cambio de canción, tamaño y movimiento del notch, indicadores de volumen... Todo se guarda como **estilos** (de fábrica o propios) que se pueden ver en una vista previa antes de aplicarlos.
 
@@ -32,7 +32,7 @@
 | Letras | Palabra a palabra (LRCLIB, NetEase y QQ Music), tema desde la portada, fondo animado, profundidad como Apple Music, cambio de canción animado con o sin letra |
 | Reproductores | Spotify y Apple Music, sin APIs privadas (AppleScript). Controles de reproducción bajo la portada |
 | Pantalla | Reloj configurable con ocultación automática, marca de agua `@frenkiieeee` discreta, Esc o clic fuera para salir |
-| Notch | Música, volumen y brillo (barra, deslizador, anillo, segmentos), notificaciones, estantería, varias pantallas, animación de canción nueva configurable |
+| Notch | Música, volumen, brillo y luz del teclado (barra, deslizador, anillo, segmentos), notificaciones, estantería, varias pantallas, animación de canción nueva configurable |
 | Widgets | Calendario (crea eventos y recordatorios pulsando la fecha), recordatorios, temporizador, sistema, portapapeles |
 | Ajustes | Vistas previas en vivo, estilos propios, restaurar valores con «Deshacer», abrir al iniciar sesión, buscar actualizaciones |
 
@@ -95,7 +95,7 @@ MycSs pide cada permiso **solo cuando lo necesita** y funciona sin los opcionale
 | Permiso | Para qué | Cuándo se pide |
 |---|---|---|
 | Automatización (Spotify, Música) | Leer la canción y la posición | Al reproducir por primera vez. **Imprescindible** |
-| Accesibilidad | Teclas de volumen y brillo en el notch | Al activar el indicador del notch. Opcional |
+| Accesibilidad | Teclas de volumen y brillo en el notch, y el atajo de la luz del teclado | Al activar el indicador del notch. Opcional |
 | Acceso total al disco | Ver las notificaciones de otras apps en el notch | Si lo activas en Notch > Widgets (Notificaciones). Opcional |
 | Calendarios | Eventos del widget de calendario | Al abrir ese widget. Opcional |
 | Recordatorios | Widget de recordatorios | Al abrir ese widget. Opcional |
