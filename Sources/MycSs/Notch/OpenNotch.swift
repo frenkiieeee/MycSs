@@ -181,27 +181,37 @@ struct MusicBlock: View {
                     // Steps back when paused, like the cover in the lyrics.
                     .scaleEffect(model.isPlayingNow ? 1 : 0.9)
                     .animation(.spring(response: 0.5, dampingFraction: 0.7), value: model.isPlayingNow)
-                    // A new song brings its own cover.
-                    .id(model.track.trackKey)
-                    .transition(.scale(scale: 0.88).combined(with: .opacity))
+                    // A new song brings its own cover: it fades in over the old one (see
+                    // `CoverThumb`) and the whole cover gives a small beat.
+                    .scaleEffect(1 + 0.05 * sin(model.artworkOpacity * .pi))
 
                 VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        MarqueeText(text: model.track.title, size: 14.5, width: HomeLayout.musicWidth - 130)
-                        MarqueeText(
-                            text: model.track.artist, size: 12, weight: .regular,
-                            color: .white.opacity(0.55), width: HomeLayout.musicWidth - 130
-                        )
+                    // The title and the artist are replaced with their own movement. Each song
+                    // is a new view (`id`), so a quick run of changes keeps animating: every
+                    // one takes the previous one's place instead of waiting for it.
+                    ZStack(alignment: .topLeading) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            MarqueeText(text: model.track.title, size: 14.5, width: HomeLayout.musicWidth - 130)
+                            MarqueeText(
+                                text: model.track.artist, size: 12, weight: .regular,
+                                color: .white.opacity(0.55), width: HomeLayout.musicWidth - 130
+                            )
+                        }
+                        .id(model.track.trackKey)
+                        .transition(AppSettings.shared.songTransition.textTransition)
                     }
-                    .id(model.track.trackKey)
-                    .transition(.blurReplace)
+                    .frame(width: HomeLayout.musicWidth - 130, alignment: .topLeading)
+                    .animation(
+                        AppSettings.shared.songTransition == .off
+                            ? nil : .smooth(duration: max(0.25, AppSettings.shared.songTransitionSeconds * 0.7)),
+                        value: model.track.trackKey
+                    )
                     Spacer(minLength: 2)
                     SeekBar(model: model)
                     Transport(model: model)
                 }
                 .frame(height: 116)
             }
-            .animation(NotchMotion.swap, value: model.track.trackKey)
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "music.note")

@@ -46,12 +46,28 @@ struct CoverThumb: View {
         }
     }
 
+    /// The cover. A new song's cover fades in over the old one, a little bigger and
+    /// settling, like the lyrics screen does; it follows the song change setting.
     private var picture: some View {
-        Group {
+        let kind = AppSettings.shared.songTransition
+        let fade = model.artworkOpacity
+        let moves = kind == .glide || kind == .cinematic
+        return ZStack {
             if let image = model.artwork {
+                // The old cover stays underneath while the new one comes in.
+                if fade < 1, let previous = model.previousArtwork {
+                    Image(nsImage: previous)
+                        .resizable()
+                        .aspectRatio(1, contentMode: .fill)
+                        .scaleEffect(moves ? 1 - 0.05 * fade : 1)
+                        .blur(radius: kind == .cinematic ? 3 * fade : 0)
+                }
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(1, contentMode: .fill)
+                    .scaleEffect(moves ? 1 + 0.08 * (1 - fade) : 1)
+                    .blur(radius: kind == .cinematic ? 4 * (1 - fade) : 0)
+                    .opacity(fade)
             } else {
                 ZStack {
                     Color.white.opacity(0.14)
@@ -62,6 +78,7 @@ struct CoverThumb: View {
             }
         }
         .frame(width: size, height: size)
+        .clipped()
     }
 }
 
