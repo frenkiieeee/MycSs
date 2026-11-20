@@ -241,4 +241,64 @@ extension AppSettings {
         }
         set { defaults.set(newValue.rawValue, forKey: SettingKey.entranceAnimation) }
     }
+
+    // MARK: - Volume and brightness on the lock screen
+
+    /// Whether the volume and brightness indicator shows on the lock screen (only there:
+    /// not over the desktop, where the system draws its own).
+    var lockHUD: Bool {
+        get { defaults.object(forKey: SettingKey.lockHUD) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: SettingKey.lockHUD) }
+    }
+
+    /// How that indicator comes and goes.
+    enum LockHUDAnimation: String, CaseIterable {
+        case fade, slide, grow, pop, drop, blur
+
+        var title: String {
+            switch self {
+            case .fade: return "Fundido"
+            case .slide: return "Deslizar desde arriba"
+            case .grow: return "Crecer"
+            case .pop: return "Rebote"
+            case .drop: return "Caída con rebote"
+            case .blur: return "Desenfoque"
+            }
+        }
+
+        /// What the indicator does when it appears and disappears.
+        var transition: AnyTransition {
+            switch self {
+            case .fade:
+                return .opacity
+            case .slide:
+                return .move(edge: .top).combined(with: .opacity)
+            case .grow:
+                return .scale(scale: 0.5, anchor: .topTrailing).combined(with: .opacity)
+            case .pop:
+                return .scale(scale: 0.25, anchor: .topTrailing).combined(with: .opacity)
+            case .drop:
+                return .offset(y: -140).combined(with: .opacity)
+            case .blur:
+                return AnyTransition(.blurReplace).combined(with: .scale(scale: 0.92, anchor: .topTrailing))
+            }
+        }
+
+        /// The curve that goes with it.
+        var animation: Animation {
+            switch self {
+            case .fade: return .easeInOut(duration: 0.25)
+            case .slide: return .smooth(duration: 0.4)
+            case .grow: return .spring(response: 0.4, dampingFraction: 0.8)
+            case .pop: return .spring(response: 0.45, dampingFraction: 0.5)
+            case .drop: return .spring(response: 0.6, dampingFraction: 0.55)
+            case .blur: return .smooth(duration: 0.45)
+            }
+        }
+    }
+
+    var lockHUDAnimation: LockHUDAnimation {
+        get { LockHUDAnimation(rawValue: defaults.string(forKey: SettingKey.lockHUDAnimation) ?? "") ?? .slide }
+        set { defaults.set(newValue.rawValue, forKey: SettingKey.lockHUDAnimation) }
+    }
 }

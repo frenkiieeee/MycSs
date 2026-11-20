@@ -344,6 +344,23 @@ struct AppearanceSettingsTab: View {
                     }
                 }
 
+                Section("Volumen y brillo en el bloqueo") {
+                    Toggle("Mostrar el indicador al cambiar el volumen o el brillo", isOn: $settings.lockHUD)
+                    if settings.lockHUD {
+                        Picker("Animación", selection: $settings.lockHUDAnimation) {
+                            ForEach(AppSettings.LockHUDAnimation.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                    }
+                    Text("""
+                    Sale arriba a la derecha solo con la pantalla bloqueada (con el \
+                    notch y su indicador activados, y el permiso de Accesibilidad), \
+                    con el mismo estilo y número que en el notch. Prueba cada animación \
+                    con «Probar volumen» en la vista previa.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+
                 Section("Aparición") {
                     Picker("Entrada", selection: $settings.entranceAnimation) {
                         ForEach(AppSettings.Entrance.allCases, id: \.self) { entrance in

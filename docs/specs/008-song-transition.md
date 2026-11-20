@@ -6,7 +6,7 @@ Estado: implementado (movimiento real sin ver con la Mac bloqueada)
 Que el paso de una canción a otra se vea fluido en la pantalla de letras, tanto si las dos canciones tienen letra como si una no la tiene, sin cortes ni parpadeos.
 
 ## No objetivos
-El notch (ya tiene su propia animación de «canción nueva», ver spec 005). El fondo y los colores (ya hacen su transición desde la portada).
+La animación de «canción nueva» del notch cerrado (ver spec 005). Con el notch **abierto** sí aplica: la portada se funde con un pequeño latido y el título y el artista cambian con la misma animación. El fondo y los colores (ya hacen su transición desde la portada).
 
 ## Datos
 - `AppSettings.songTransition`: `off`, `fade`, `glide`, `cinematic` (por defecto `cinematic`).
@@ -29,3 +29,6 @@ Ninguno. La letra vieja no se actualiza mientras sale (queda congelada), y la nu
 
 ## Preguntas abiertas
 - ¿Mostrar una barra fina de «cargando letra» si tarda más de 2 s?
+
+## Indicador de volumen en el bloqueo
+Con la pantalla **bloqueada** (no en el salvapantallas de letras, donde macOS dibuja el suyo) el overlay dibuja el indicador de volumen y brillo arriba a la derecha, con el estilo del notch. Ajustes: `lockHUD` (interruptor) y `lockHUDAnimation` (fundido, deslizar, crecer, rebote, caída con rebote, desenfoque), en Apariencia. Necesita el notch y su indicador activos y Accesibilidad. «Probar volumen» en la vista previa lo enseña.

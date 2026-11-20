@@ -296,6 +296,12 @@ final class LyricsViewModel {
     /// Whether the overlay (lock screen or screensaver) is using the model.
     @ObservationIgnored private var overlayRunning = false
 
+    /// The notch's model, which holds the volume and brightness indicator. It is set
+    /// **only while the screen is locked**: the notch is hidden then and the overlay
+    /// draws the indicator instead. Unlocked it is nil, so the overlay never draws it.
+    /// (It is observable on purpose: the view has to notice when it is set.)
+    var hudSource: NotchModel?
+
     /// Whether the notch is using the model.
     @ObservationIgnored private(set) var notchActive = false
     /// Whether the notch is open, which asks for a faster refresh.

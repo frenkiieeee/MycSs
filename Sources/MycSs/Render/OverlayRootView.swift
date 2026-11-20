@@ -146,6 +146,22 @@ struct OverlayRootView: View {
                     progress: model.entranceProgress
                 ))
 
+                // The volume and brightness indicator, which the notch cannot show while the
+                // screen is locked. Only on the lock screen (and in the settings preview).
+                ZStack {
+                    if settings.lockHUD, model.isVisible, model.mode == .lock || model.mode == .preview,
+                       let source = model.hudSource, let hud = source.hud {
+                        OverlayHUD(hud: hud, shown: source.hudShown, scale: max(1.2, height / 760))
+                            .padding(.top, height * 0.035 + 12)
+                            .padding(.trailing, width * 0.045)
+                            .frame(width: width, height: height, alignment: .topTrailing)
+                            .transition(settings.lockHUDAnimation.transition)
+                    }
+                }
+                .animation(settings.lockHUDAnimation.animation, value: model.hudSource?.hud != nil)
+                .frame(width: width, height: height)
+                .allowsHitTesting(false)
+
                 // The hint sits above everything, in the middle of the screen
                 // where the password field is, and along the bottom.
                 if model.showsPasswordHint {
@@ -362,5 +378,27 @@ extension AppSettings.SongTransition {
                 removal: AnyTransition(.blurReplace).combined(with: .offset(y: -10))
             )
         }
+    }
+}
+
+
+/// The volume or brightness indicator on the lock screen: a dark pill with the icon and
+/// the value, drawn like the notch's own (same style, numbers and motion), only bigger.
+struct OverlayHUD: View {
+    let hud: NotchHUD
+    let shown: CGFloat
+    var scale: CGFloat = 1.2
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HUDIcon(hud: hud, shown: shown, size: 15)
+            HUDValue(hud: hud, shown: shown, barWidth: 110)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .background(Capsule().fill(.black.opacity(0.72)))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1))
+        .shadow(color: .black.opacity(0.4), radius: 18, y: 6)
+        .scaleEffect(scale, anchor: .topTrailing)
     }
 }
