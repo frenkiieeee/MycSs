@@ -116,7 +116,13 @@ struct OverlayRootView: View {
                                     columnWidth: centered ? coverWidth : artworkColumn,
                                     controls: controlsOn
                                 )
-                                .frame(maxWidth: .infinity, alignment: centered ? .center : (settings.coverOnRight ? .trailing : .leading))
+                                // Without the clock (the Minimal style) the cover shares the
+                                // middle of the screen with the lyrics instead of hugging the top.
+                                .frame(
+                                    maxWidth: .infinity,
+                                    maxHeight: settings.showClock ? nil : .infinity,
+                                    alignment: centered ? .center : (settings.coverOnRight ? .trailing : .leading)
+                                )
                             }
                         }
                         .frame(maxHeight: .infinity, alignment: .center)
