@@ -58,11 +58,24 @@ enum NotificationSelfTest {
         check("the database is readable", model.access == .granted)
         check("what was already there is not announced", received.isEmpty)
 
-        // New ones arrive.
+        // New ones arrive. The safety timer runs every 3 s: arriving well before that
+        // means the write itself was heard (spec 012).
+        let rules = UserDefaults.standard.object(forKey: SettingKey.notchNotificationRules)
+        let defaultRule = UserDefaults.standard.object(forKey: SettingKey.notchNotificationDefault)
+        defer {
+            UserDefaults.standard.set(rules, forKey: SettingKey.notchNotificationRules)
+            UserDefaults.standard.set(defaultRule, forKey: SettingKey.notchNotificationDefault)
+        }
+        UserDefaults.standard.removeObject(forKey: SettingKey.notchNotificationRules)
+        UserDefaults.standard.removeObject(forKey: SettingKey.notchNotificationDefault)
+        try? await Task.sleep(nanoseconds: 3_200_000_000)
+        let sent = Date()
         insert(id: 6, app: 1, title: "Marta", subtitle: "", body: "¿Comemos hoy?", age: 1)
         insert(id: 7, app: 2, title: "Factura", subtitle: "Proveedor", body: "Adjunto el PDF", age: 2)
-        try? await Task.sleep(nanoseconds: 2_200_000_000)
-        check("two new notifications are announced", received.count == 2)
+        for _ in 0..<40 where received.count < 2 { try? await Task.sleep(nanoseconds: 25_000_000) }
+        let delay = Date().timeIntervalSince(sent)
+        check(String(format: "two new notifications arrive at once (%.0f ms, the timer would take up to 3 s)", delay * 1000),
+              received.count == 2 && delay < 0.8)
         check("title, body and app are read",
               received.first.map { $0.title == "Marta" && $0.body == "¿Comemos hoy?" && $0.bundleID == "com.apple.MobileSMS" } ?? false)
         check("subtitle is read", received.last?.subtitle == "Proveedor")
@@ -74,9 +87,19 @@ enum NotificationSelfTest {
         try? await Task.sleep(nanoseconds: 1_600_000_000)
         check("an old notification is not announced", received.count == 2)
 
+        // An app set to "only the system" stays out of the notch.
+        AppSettings.shared.setNotificationRule(.system, for: "com.apple.MobileSMS")
+        insert(id: 9, app: 1, title: "Marta", subtitle: "", body: "Otra", age: 1)
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        check("an app set to «Solo sistema» is not announced", received.count == 2)
+        check("the history keeps what reached the notch, newest first",
+              model.history.map(\.id) == [7, 6])
+
         // Dismissed.
         model.dismiss()
         check("dismissing clears it", model.current == nil)
+        model.clearHistory()
+        check("the history can be cleared", model.history.isEmpty)
         model.stop()
 
         // A folder the app cannot read.

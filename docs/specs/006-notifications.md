@@ -1,6 +1,6 @@
 # 006 Notificaciones en el notch
 
-Estado: lector hecho y probado con una base sintética; sin verificar con la base real (falta Acceso total al disco en la máquina de desarrollo)
+Estado: sustituido en parte por [012](012-notifications-v2.md) (lectura al instante, reglas por app, cerrar el aviso del sistema). Comprobado con la base real el 24 nov 2026: las notificaciones se escriben aunque macOS no enseñe el aviso.
 
 ## Objetivo
 Mostrar las notificaciones en el notch al estilo de las Dynamic Island.

@@ -2,48 +2,22 @@ import AppKit
 import Observation
 import SQLite3
 
-/// One notification of another app, ready to draw.
-struct NotchNotification: Identifiable, Equatable {
-    let id: Int64
-    let bundleID: String
-    let title: String
-    let subtitle: String
-    let body: String
-    let date: Date
-    /// An SF Symbol to use instead of an app icon, for what MycSs says itself
-    /// (the timer ending).
-    var symbolName: String? = nil
-
-    /// The name of the app, from its bundle.
-    var appName: String {
-        if symbolName != nil { return "MycSs" }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return bundleID }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
-    }
-
-    /// The icon of the app.
-    var icon: NSImage? {
-        guard symbolName == nil else { return nil }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
-    }
-
-    /// The first line that says something: the title, or the body.
-    var headline: String { title.isEmpty ? body : title }
-    /// What goes under it.
-    var detail: String { title.isEmpty ? subtitle : (subtitle.isEmpty ? body : "\(subtitle) · \(body)") }
-}
-
-/// Watches the notifications macOS delivers and hands the new ones to the notch.
+/// Watches the notifications macOS delivers and hands the new ones to the notch
+/// (specs 006 and 012).
 ///
 /// **There is no public way to receive another app's notifications**, so this
-/// reads the database where Notification Centre keeps them. That folder is
-/// protected: the app needs the **Full Disk Access** permission, and without it
-/// the notch simply has nothing to show (and says why in the settings).
+/// reads the database where Notification Centre keeps them (`NotificationDatabase`).
+/// That folder is protected: the app needs the **Full Disk Access** permission, and
+/// without it the notch simply has nothing to show (and says why in the settings).
 ///
-/// **It cannot hide the system's own banner.** macOS draws that by itself and no
-/// app can stop it; the settings point to where each app's banner can be turned
-/// off, which is the only way to see a notification in one place only.
+/// **It reads when the database is written**, not on a clock: `FileWatcher` hears
+/// the write as it happens, so a notification reaches the notch a few milliseconds
+/// after macOS stores it. A slow timer stays as a safety net.
+///
+/// Each app has a rule (`AppSettings.NotificationRule`): in the notch and the system,
+/// the notch only (the system's banner is then closed, see `SystemBannerCloser`), or
+/// the system only (MycSs ignores it). The last ones that reached the notch are kept
+/// in memory, for the notch's widget.
 @MainActor
 @Observable
 final class NotificationsModel {
@@ -61,41 +35,66 @@ final class NotificationsModel {
     private(set) var access: Access = .unknown
     /// The newest one, until it is dismissed.
     private(set) var current: NotchNotification?
+    /// The last ones that reached the notch, newest first.
+    private(set) var history: [NotchNotification] = []
 
-    /// Called, on the main thread, for every new notification.
+    /// Called, on the main thread, for every new notification the notch shows.
     @ObservationIgnored var onNotification: ((NotchNotification) -> Void)?
 
     @ObservationIgnored private var db: OpaquePointer?
     @ObservationIgnored private var lastID: Int64 = 0
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private let watcher = FileWatcher()
+    @ObservationIgnored let banners = SystemBannerCloser()
     /// The settings page asks every two seconds with a throwaway model: it should not fill the log.
     @ObservationIgnored var logsChanges = true
     @ObservationIgnored private var lastOpenAttempt = Date.distantPast
+    @ObservationIgnored private var openPath: String?
 
     /// Where the database is. A test can point it somewhere else.
     @ObservationIgnored var overridePath: String? = ProcessInfo.processInfo.environment["MYCSS_NOTIFICATION_DB"]
 
+    init(demo: Bool = false) {
+        guard demo else { return }
+        // The settings previews and the pictures show a history of their own.
+        history = [
+            NotchNotification(id: 3, bundleID: "com.apple.MobileSMS", title: "Marta", subtitle: "",
+                              body: "¿Comemos hoy?", date: Date().addingTimeInterval(-120)),
+            NotchNotification(id: 2, bundleID: "com.apple.mail", title: "Factura de noviembre", subtitle: "",
+                              body: "Adjunto el PDF", date: Date().addingTimeInterval(-1500)),
+            NotchNotification(id: 1, bundleID: "com.apple.iCal", title: "Examen a las 13:25", subtitle: "",
+                              body: "En 1 hora", date: Date().addingTimeInterval(-3600)),
+        ]
+    }
+
     /// Notifications older than this are history, not news.
     private let freshness: TimeInterval = 90
+    private let historyLimit = 30
 
     // MARK: - Lifecycle
 
+    var isRunning: Bool { timer != nil }
+
     func start() {
         guard timer == nil else { return }
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
-        timer.tolerance = 0.3
+        timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+        watcher.onChange = { [weak self] in self?.poll() }
         poll()
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        watcher.stop()
+        banners.stop()
         if let db { sqlite3_close(db) }
         db = nil
+        openPath = nil
         current = nil
     }
 
@@ -103,12 +102,16 @@ final class NotificationsModel {
         current = nil
     }
 
+    func clearHistory() {
+        history.removeAll()
+    }
+
     /// Opens the app a notification came from, and dismisses it.
     func open(_ notification: NotchNotification) {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: notification.bundleID) {
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
-        dismiss()
+        if current?.id == notification.id { dismiss() }
     }
 
     /// Looks once whether the database can be read, without starting to watch it.
@@ -122,25 +125,31 @@ final class NotificationsModel {
         return access
     }
 
-    // MARK: - Paths
-
-    /// Where macOS keeps them: a group container since macOS 15, a per-user folder
-    /// before that.
-    private func candidatePaths() -> [String] {
-        if let overridePath { return [overridePath] }
-        var paths = [NSHomeDirectory() + "/Library/Group Containers/group.com.apple.usernoted/db2/db"]
-        var buffer = [CChar](repeating: 0, count: 1024)
-        if confstr(_CS_DARWIN_USER_DIR, &buffer, buffer.count) > 0 {
-            paths.append(String(cString: buffer) + "com.apple.notificationcenter/db2/db")
+    /// The apps that sent notifications (from the database and the history), the
+    /// most recent first, for the settings.
+    func knownApps() -> [String] {
+        if db == nil { openDatabase() }
+        var apps = history.map(\.bundleID)
+        if let db { apps += NotificationDatabase.apps(in: db) }
+        if timer == nil, let db {
+            sqlite3_close(db)
+            self.db = nil
         }
-        return paths
+        var seen = Set<String>()
+        let own = Bundle.main.bundleIdentifier ?? ""
+        return apps.filter { !$0.isEmpty && $0 != own && seen.insert($0).inserted }
     }
 
-    // MARK: - Polling
+    // MARK: - Reading
 
-    private func poll() {
+    private func candidatePaths() -> [String] {
+        if let overridePath { return [overridePath] }
+        return NotificationDatabase.candidatePaths()
+    }
+
+    func poll() {
         if db == nil {
-            // Not insisting every second while the permission is missing.
+            // Not insisting every time while the permission is missing.
             let wait: TimeInterval = access == .granted ? 1 : 5
             guard Date().timeIntervalSince(lastOpenAttempt) >= wait else { return }
             lastOpenAttempt = Date()
@@ -150,19 +159,24 @@ final class NotificationsModel {
 
         if lastID == 0 {
             // Start from now: what is already in there is history.
-            lastID = Self.maxRecordID(db)
+            lastID = NotificationDatabase.maxRecordID(db)
             return
         }
 
-        let fresh = Self.records(in: db, after: lastID)
+        let fresh = NotificationDatabase.records(in: db, after: lastID)
         guard !fresh.isEmpty else { return }
         lastID = fresh.map(\.id).max() ?? lastID
 
+        let settings = AppSettings.shared
         for item in fresh where Date().timeIntervalSince(item.date) < freshness {
-            guard item.bundleID != Bundle.main.bundleIdentifier else { continue }
-            guard !item.headline.isEmpty else { continue }
+            guard item.bundleID != Bundle.main.bundleIdentifier, !item.headline.isEmpty else { continue }
+            let rule = settings.notificationRule(for: item.bundleID)
+            guard rule.shownInNotch else { continue }
+            history.insert(item, at: 0)
+            if history.count > historyLimit { history.removeLast(history.count - historyLimit) }
             current = item
             onNotification?(item)
+            if rule.hidesBanner, isRunning, overridePath == nil { banners.close(matching: item) }
         }
     }
 
@@ -180,6 +194,12 @@ final class NotificationsModel {
                     db = handle
                     if access != .granted, logsChanges { Log.line("notifications: reading \(path)") }
                     access = .granted
+                    if timer != nil, openPath != path {
+                        openPath = path
+                        // The database, its write-ahead log and the folder (where the log appears).
+                        let folder = (path as NSString).deletingLastPathComponent
+                        watcher.watch([path, path + "-wal", folder])
+                    }
                     return
                 }
                 sqlite3_finalize(statement)
@@ -206,55 +226,5 @@ final class NotificationsModel {
             access = newAccess
             if logsChanges { Log.line("notifications: \(newAccess == .denied ? "Full Disk Access is missing" : "no database found")") }
         }
-    }
-
-    // MARK: - Reading the database
-
-    private static func maxRecordID(_ db: OpaquePointer) -> Int64 {
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(db, "SELECT COALESCE(MAX(rec_id), 1) FROM record", -1, &statement, nil) == SQLITE_OK,
-              sqlite3_step(statement) == SQLITE_ROW
-        else { return 1 }
-        return max(sqlite3_column_int64(statement, 0), 1)
-    }
-
-    /// The records after `id`, oldest first.
-    static func records(in db: OpaquePointer, after id: Int64) -> [NotchNotification] {
-        let sql = """
-        SELECT r.rec_id, a.identifier, r.data, r.delivered_date
-        FROM record r LEFT JOIN app a ON r.app_id = a.app_id
-        WHERE r.rec_id > ? ORDER BY r.rec_id ASC LIMIT 20
-        """
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
-        sqlite3_bind_int64(statement, 1, id)
-
-        var result: [NotchNotification] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            let recID = sqlite3_column_int64(statement, 0)
-            let identifier = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? ""
-            var delivered = sqlite3_column_double(statement, 3)
-            // Seconds since 2001, like every Cocoa date; a missing one means "now".
-            if delivered <= 0 { delivered = Date().timeIntervalSinceReferenceDate }
-
-            guard let bytes = sqlite3_column_blob(statement, 2) else { continue }
-            let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 2)))
-            guard let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
-            else { continue }
-
-            let request = plist["req"] as? [String: Any] ?? [:]
-            let bundle = identifier.isEmpty ? (plist["app"] as? String ?? "") : identifier
-            result.append(NotchNotification(
-                id: recID,
-                bundleID: bundle,
-                title: request["titl"] as? String ?? "",
-                subtitle: request["subt"] as? String ?? "",
-                body: request["body"] as? String ?? "",
-                date: Date(timeIntervalSinceReferenceDate: delivered)
-            ))
-        }
-        return result
     }
 }
