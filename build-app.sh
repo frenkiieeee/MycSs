@@ -106,6 +106,13 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "${ICONSET}" -o "${CONTENTS}/Resources/AppIcon.icns"
 
+# The Now Playing library (spec 014, ADR 008): /usr/bin/perl loads it to read what
+# Firefox and Zen play. It is built here, with the Command Line Tools, so the people
+# who install the DMG need nothing.
+echo ">> Building the Now Playing library..."
+clang -dynamiclib -fobjc-arc -Wall -mmacosx-version-min=15.0 -framework Foundation \
+    Support/NowPlayingAdapter/adapter.m -o "${CONTENTS}/Resources/libMycSsNowPlaying.dylib"
+
 # Signing. With `.dev-signing/` (made by scripts/make-dev-cert.sh) the app is
 # signed with a stable identity, so macOS keeps the permissions it grants (the
 # Accessibility one for the volume keys) between builds. Without it the app is

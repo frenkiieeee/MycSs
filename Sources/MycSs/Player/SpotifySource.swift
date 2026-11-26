@@ -33,8 +33,7 @@ import Foundation
 /// 1. `st` is a reserved token in AppleScript (`set st to …` fails with -2741),
 ///    so the player state is bound to `pState`.
 /// 2. The system locale is `en_ES`, so numbers come back with a **comma** as the
-///    decimal separator. `Double("157,533")` is nil, which would silently pin the
-///    position to 0 and freeze the karaoke. The comma is replaced before parsing.
+///    decimal separator (`AppleScriptValue.number` handles it).
 /// 3. `spotify url of t` cannot be assigned to a variable (-10003, "access not
 ///    allowed"), so it has to be read inline in the returned list.
 struct SpotifySource: PlayerSource {
@@ -73,13 +72,13 @@ struct SpotifySource: PlayerSource {
                 set ar to artist of t
                 set al to album of t
                 set dur to (duration of t) / 1000
-                return {ar, al, dur, spotify url of t}
+                return {name of t, ar, al, dur, spotify url of t}
             on error
-                return {"", "", 0, ""}
+                return {"", "", "", 0, ""}
             end try
         end tell
     else
-        return {"", "", 0, ""}
+        return {"", "", "", 0, ""}
     end if
     """
 
@@ -133,8 +132,9 @@ struct SpotifySource: PlayerSource {
     /// - Parameter completion: called with the result, on the reading queue.
     func readTrack(completion: @escaping (PlayerTrackMetadata) -> Void) {
         Self.queue.async {
-            let (artist, album, duration, url) = Self.runTrack()
+            let (title, artist, album, duration, url) = Self.runTrack()
             completion(PlayerTrackMetadata(
+                title: title,
                 artist: artist,
                 album: album,
                 durationSec: duration,
@@ -156,55 +156,41 @@ struct SpotifySource: PlayerSource {
         }
         guard output.numberOfItems >= 3 else { return (false, 0, "") }
 
-        let state = string(output.atIndex(1))
-        let position = number(output.atIndex(2))
-        let title = string(output.atIndex(3))
+        let state = AppleScriptValue.string(output.atIndex(1))
+        let position = AppleScriptValue.number(output.atIndex(2))
+        let title = AppleScriptValue.string(output.atIndex(3))
         return (state.lowercased() == "playing", position, title)
     }
 
-    private static func runTrack() -> (String, String, Double, String) {
-        guard let script = compiledTrackScript else { return ("", "", 0, "") }
+    private static func runTrack() -> (String, String, String, Double, String) {
+        guard let script = compiledTrackScript else { return ("", "", "", 0, "") }
         var error: NSDictionary?
         let output = script.executeAndReturnError(&error)
 
         if let error {
             report(error)
-            return ("", "", 0, "")
+            return ("", "", "", 0, "")
         }
-        guard output.numberOfItems >= 4 else { return ("", "", 0, "") }
+        guard output.numberOfItems >= 5 else { return ("", "", "", 0, "") }
 
         return (
-            string(output.atIndex(1)),
-            string(output.atIndex(2)),
-            number(output.atIndex(3)),
-            string(output.atIndex(4))
+            AppleScriptValue.string(output.atIndex(1)),
+            AppleScriptValue.string(output.atIndex(2)),
+            AppleScriptValue.string(output.atIndex(3)),
+            AppleScriptValue.number(output.atIndex(4)),
+            AppleScriptValue.string(output.atIndex(5))
         )
     }
 
-    private static func string(_ descriptor: NSAppleEventDescriptor?) -> String {
-        descriptor?.stringValue ?? ""
-    }
+    // MARK: - Commands and artwork
 
-    /// Parses a number that may use a comma as the decimal separator.
-    ///
-    /// The system's locale is `en_ES`, so AppleScript renders `157.53` as
-    /// `"157,53"`. Without this, the position would silently become 0.
-    private static func number(_ descriptor: NSAppleEventDescriptor?) -> Double {
-        guard let raw = descriptor?.stringValue else { return 0 }
-        let normalised = raw.replacingOccurrences(of: ",", with: ".")
-        guard let value = Double(normalised) else { return 0 }
-        return value
-    }
-
-    // MARK: - Artwork
-
-    /// The artwork URL for the current track.
-    ///
-    /// Read separately because it is only needed once per track.
     func send(_ command: PlayerCommand) {
         AppleScriptValue.run(command, app: "Spotify", on: Self.queue)
     }
 
+    /// The artwork URL for the current track. Read separately because it is only
+    /// needed once per track; it can lag behind the track for a moment (see
+    /// `CoverProvider`).
     func artworkURL() -> String? {
         // On the player's own queue, so it never overlaps another Apple Event.
         // Callers are never on that queue (they are the main thread or a

@@ -466,6 +466,19 @@ final class LyricsViewModel {
         Task { await engine.perform(command) }
     }
 
+    /// The players that have something now; with more than one, the badge on the
+    /// cover moves between them.
+    private(set) var availableSources: [NowPlaying.Source] = []
+
+    /// Moves to the next player that has something (spec 014).
+    func cycleSource() {
+        if isDemo {
+            Log.line("demo: next player")
+            return
+        }
+        Task { await engine.cycleSource() }
+    }
+
     /// Whether the demo timeline was paused with the play button.
     @ObservationIgnored private var demoPaused = DemoFlags.paused
 
@@ -763,6 +776,8 @@ final class LyricsViewModel {
         let activeIndex = await engine.activeLineIndex
         let track = await engine.current
         let isLoading = await engine.isLoadingLyrics
+        let sources = await engine.availableSources
+        if sources != availableSources { availableSources = sources }
 
         // Only publish when something actually changed, so SwiftUI does not
         // re-render the whole lyric stack on every frame.
@@ -790,8 +805,8 @@ final class LyricsViewModel {
         updateEntrance()
 
         // The artwork only has to be fetched once per track.
-        if track.hasTrack, track.trackKey != lastArtworkKey {
-            lastArtworkKey = track.trackKey
+        if track.hasTrack, track.coverKey != lastArtworkKey {
+            lastArtworkKey = track.coverKey
             themeEngine.loadArtwork(for: track)
         }
 

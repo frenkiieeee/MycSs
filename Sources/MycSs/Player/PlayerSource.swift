@@ -13,11 +13,17 @@ struct PlayerSnapshot {
 
 /// The metadata that is expensive to read, fetched once per track.
 struct PlayerTrackMetadata {
+    /// The title, read in the same script as the rest, so the four belong to the
+    /// same track even when it changed since the fast reading. Empty when unknown.
+    var title: String = ""
     var artist: String
     var album: String
     var durationSec: Double
     /// The player's own URL for the track (`spotify:track:<id>`), when it has one.
     var trackURL: String?
+    /// For a browser tab: the site and the browser's bundle identifier.
+    var site: String = ""
+    var appBundleID: String = ""
 }
 
 /// What the player controls can ask a player to do.
@@ -64,4 +70,9 @@ protocol PlayerSource {
 extension PlayerSource {
     func artworkData() -> Data? { nil }
     func send(_ command: PlayerCommand) {}
+    /// The players that had something the last time they were read (only a hub
+    /// knows more than one).
+    var availableSources: [NowPlaying.Source] { [] }
+    /// Moves to the next player that has something; false when there is none.
+    func cycleSource() -> Bool { false }
 }

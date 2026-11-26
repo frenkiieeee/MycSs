@@ -167,6 +167,17 @@ actor SyncEngine {
         }
     }
 
+    /// The players that had something the last time they were read.
+    var availableSources: [NowPlaying.Source] { source.availableSources }
+
+    /// Moves to the next player that has something, and reads it at once.
+    @discardableResult
+    func cycleSource() async -> Bool {
+        let moved = source.cycleSource()
+        if moved { await poll() }
+        return moved
+    }
+
     func stop() {
         pollTask?.cancel()
         pollTask = nil
@@ -247,8 +258,24 @@ actor SyncEngine {
         isLoadingTrack = true
         defer { isLoadingTrack = false }
 
-        let metadata = await withCheckedContinuation { continuation in
-            source.readTrack { continuation.resume(returning: $0) }
+        // The metadata has to be the one of the title being shown. The track can
+        // change between the fast reading and this one (Spotify's DJ talks over a
+        // quick change of song), and a title with the previous song's artist would
+        // fetch the wrong lyrics and the wrong cover.
+        var wanted = loadedTitle
+        var metadata = await readMetadata()
+        for _ in 0..<2 {
+            let read = metadata.title.isEmpty ? wanted : metadata.title
+            if read == loadedTitle { break }
+            if loadedTitle == wanted {
+                // Nothing newer came in meanwhile: this reading is the newest.
+                Log.line("sync: the track changed while reading it ('\(wanted)' -> '\(read)')")
+                loadedTitle = read
+                break
+            }
+            // Another title arrived while reading: read again, for that one.
+            wanted = loadedTitle
+            metadata = await readMetadata()
         }
 
         var track = nowPlaying
@@ -257,15 +284,36 @@ actor SyncEngine {
         track.album = metadata.album
         track.durationSec = metadata.durationSec
         track.spotifyURL = metadata.trackURL
+        track.siteName = metadata.site
+        track.appBundleID = metadata.appBundleID
         track.source = source.id
         track.isPlaying = !isPaused
         track.positionSec = anchorPosition
         nowPlaying = track
 
-        Log.line("sync: track changed to '\(track.title)' by '\(track.artist)'")
+        Log.line("sync: track changed to '\(track.title)' by '\(track.artist)' (\(track.source.rawValue), \(track.spotifyURL ?? "no url"), album '\(track.album)')")
         lyrics = nil
         lyricsNotFound = false
         isLoading = true
+
+        // A browser tab is only searched for lyrics when the page says who sings
+        // (Media Session, as music sites do): the title of any other page is not
+        // sent to the lyrics services.
+        // Spotify's DJ talking, a podcast or an ad: not a song, no lyrics to look for
+        // (a search for "Up next" could bring a song of that name).
+        if track.isSpotifyNonSong {
+            Log.line("sync: '\(track.title)' is not a song (\(track.spotifyURL ?? "")): no lyrics")
+            lyricsTask?.cancel()
+            isLoading = false
+            lyricsNotFound = true
+            return
+        }
+        if track.source == .browser, track.artist.isEmpty || track.artist == track.siteName {
+            lyricsTask?.cancel()
+            isLoading = false
+            lyricsNotFound = true
+            return
+        }
 
         // The lyrics are fetched in a task of their own. Waiting for them here
         // would stop the polling, and with it the position, for as long as the
@@ -273,6 +321,12 @@ actor SyncEngine {
         // stopped even longer.
         lyricsTask?.cancel()
         lyricsTask = Task { [weak self] in await self?.loadLyrics(for: track) }
+    }
+
+    private func readMetadata() async -> PlayerTrackMetadata {
+        await withCheckedContinuation { continuation in
+            source.readTrack { continuation.resume(returning: $0) }
+        }
     }
 
     // MARK: - Lyrics

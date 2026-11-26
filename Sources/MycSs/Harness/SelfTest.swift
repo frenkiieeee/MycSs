@@ -17,6 +17,7 @@ enum SelfTest {
         await SelfTest.testParsers()
         SelfTest.testVersioning()
         SelfTest.testKeyboardLightShortcut()
+        await SelfTest.testBehaviour()
         print("\n== done ==")
     }
 
@@ -29,6 +30,8 @@ enum SelfTest {
         await SelfTest.testParsers()
         SelfTest.testVersioning()
         SelfTest.testKeyboardLightShortcut()
+        await SelfTest.testBehaviour()
+        await SelfTest.testSystemNowPlayingLive()
         SelfTest.testKeyboardBacklight()
 
         // 1. AppleScript reader against the live Spotify app.

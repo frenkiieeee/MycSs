@@ -93,6 +93,15 @@ final class ThemeEngine {
                 self?.lastArtworkURL = found.url
                 self?.apply(artwork: found.image)
             }
+            // A cover from the cache leaves no URL behind. The player's URL is read
+            // once it has settled, so the next song can tell it from its own.
+            guard found.url == nil, track.source == .spotify else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            let settled = await Task.detached(priority: .utility) { source.artworkURL() }.value
+            guard !Task.isCancelled, let settled else { return }
+            await CoverProvider.shared.remember(url: settled, for: track.coverKey)
+            await MainActor.run { self?.lastArtworkURL = settled }
         }
     }
 

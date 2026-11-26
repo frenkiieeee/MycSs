@@ -7,8 +7,12 @@ import Foundation
 /// 1. **The disk cache.** A cover that was found once is never searched again,
 ///    and it is there at once when the same song comes round.
 /// 2. **The player.** Spotify gives a URL and Music hands over the image. The URL
-///    can still be the *previous* song's for a moment after a change, so it is
-///    asked again a couple of times before it is trusted.
+///    can still be the *previous* song's for a while after a change (with Spotify's
+///    DJ, for seconds), so every URL is remembered with the song it belongs to, and
+///    a URL that belongs to another song is never used (it is asked again, and if
+///    it does not change the catalogues are searched instead). Before this, a cover
+///    found in the cache left no URL to compare with, and the next song could keep
+///    the previous singer's cover for good.
 /// 3. **Apple's catalogue** (the iTunes Search API) and then **Deezer's**, both
 ///    public and without a key, for what the player does not have: local files,
 ///    songs Music cannot give the artwork of, a URL that never arrives. Their
@@ -19,6 +23,9 @@ actor CoverProvider {
     static let shared = CoverProvider()
 
     private var memory: [String: NSImage] = [:]
+    /// Which song each player URL was seen with, to notice a URL that is still the
+    /// previous song's.
+    private var urlOwner: [String: String] = [:]
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 12
@@ -44,33 +51,47 @@ actor CoverProvider {
         previousURL: String?,
         readPlayer: @escaping @Sendable () -> (url: String?, data: Data?)
     ) async -> (image: NSImage, origin: Origin, url: String?)? {
-        let key = track.trackKey
+        let key = track.coverKey
+        let playerOnly = track.coverFromPlayerOnly
         if let image = memory[key] { return (image, .memory, nil) }
-        if let data = Self.readDisk(key), let image = NSImage(data: data) {
+        if !playerOnly, let data = Self.readDisk(key), let image = NSImage(data: data) {
             memory[key] = image
             return (image, .disk, nil)
         }
 
         // The player. Right after a change its URL can be the old one.
         var playerURL: String?
-        for attempt in 0..<3 {
+        for attempt in 0..<5 {
             let answer = await Task.detached(priority: .userInitiated) { readPlayer() }.value
             if let data = answer.data, let image = NSImage(data: data), Self.isUsable(image) {
-                store(data, image, for: key)
+                if playerOnly {
+                    // A page's icon is not a song's: kept for this session only.
+                    memory[key] = image
+                } else {
+                    store(data, image, for: key)
+                }
                 return (image, .player, nil)
             }
-            playerURL = answer.url
             guard let url = answer.url else { break }
-            if url == previousURL, attempt < 2 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                continue
+            if isStale(url, for: key, previousURL: previousURL) {
+                if attempt < 4 {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    continue
+                }
+                Log.line("cover: the player still gives the previous song's cover; searching the catalogues")
+                break
             }
+            playerURL = url
             if let (data, image) = await download(url) {
-                store(data, image, for: key)
+                remember(url: url, for: key)
+                if playerOnly { memory[key] = image } else { store(data, image, for: key) }
                 return (image, .player, url)
             }
             break
         }
+
+        // A page in the browser, or the DJ talking, has no album in any catalogue.
+        guard !playerOnly else { return nil }
 
         // The catalogues.
         if let (data, image, origin) = await onlineCover(title: track.title, artist: track.artist) {
@@ -78,6 +99,30 @@ actor CoverProvider {
             return (image, origin, playerURL)
         }
         return nil
+    }
+
+    /// Notes that a player URL belongs to a song. `ThemeEngine` also calls it a few
+    /// seconds into a song whose cover came from the cache, so the next song can
+    /// tell the old URL from its own.
+    func remember(url: String, for key: String) {
+        if urlOwner.count > 400 { urlOwner.removeAll() }
+        urlOwner[url] = key
+    }
+
+    /// Whether a URL is the previous song's and not this one's.
+    func isStale(_ url: String, for key: String, previousURL: String?) -> Bool {
+        if url == previousURL { return true }
+        if let owner = urlOwner[url], owner != key { return true }
+        return false
+    }
+
+    /// Forgets every cover, in memory and on disk. The settings offer it, for a
+    /// cover that was saved wrong.
+    func clearCache() {
+        memory.removeAll()
+        urlOwner.removeAll()
+        if let folder = Self.folder() { try? FileManager.default.removeItem(at: folder) }
+        Log.line("cover: cache cleared")
     }
 
     /// Looks the cover up in the catalogues only. Also what the bench measures.
@@ -205,9 +250,13 @@ actor CoverProvider {
         Self.writeDisk(data, for: key)
     }
 
+    /// `Covers2`: the folder of the first versions (`Covers`) could hold covers saved
+    /// with the previous song's URL, so it is dropped once and the covers are found again.
     private static func folder() -> URL? {
         guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
-        let folder = caches.appendingPathComponent("MycSs/Covers", isDirectory: true)
+        let old = caches.appendingPathComponent("MycSs/Covers", isDirectory: true)
+        if FileManager.default.fileExists(atPath: old.path) { try? FileManager.default.removeItem(at: old) }
+        let folder = caches.appendingPathComponent("MycSs/Covers2", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }

@@ -47,13 +47,13 @@ struct AppleMusicSource: PlayerSource {
                 set ar to artist of t
                 set al to album of t
                 set dur to duration of t
-                return {ar, al, dur}
+                return {name of t, ar, al, dur}
             on error
-                return {"", "", 0}
+                return {"", "", "", 0}
             end try
         end tell
     else
-        return {"", "", 0}
+        return {"", "", "", 0}
     end if
     """
 
@@ -110,8 +110,9 @@ struct AppleMusicSource: PlayerSource {
 
     func readTrack(completion: @escaping (PlayerTrackMetadata) -> Void) {
         Self.queue.async {
-            let (artist, album, duration) = Self.runTrack()
+            let (title, artist, album, duration) = Self.runTrack()
             completion(PlayerTrackMetadata(
+                title: title,
                 artist: artist,
                 album: album,
                 durationSec: duration,
@@ -158,21 +159,22 @@ struct AppleMusicSource: PlayerSource {
         )
     }
 
-    private static func runTrack() -> (String, String, Double) {
-        guard let script = compiledTrackScript else { return ("", "", 0) }
+    private static func runTrack() -> (String, String, String, Double) {
+        guard let script = compiledTrackScript else { return ("", "", "", 0) }
         var error: NSDictionary?
         let output = script.executeAndReturnError(&error)
 
         if let error {
             report(error)
-            return ("", "", 0)
+            return ("", "", "", 0)
         }
-        guard output.numberOfItems >= 3 else { return ("", "", 0) }
+        guard output.numberOfItems >= 4 else { return ("", "", "", 0) }
 
         return (
             AppleScriptValue.string(output.atIndex(1)),
             AppleScriptValue.string(output.atIndex(2)),
-            AppleScriptValue.number(output.atIndex(3))
+            AppleScriptValue.string(output.atIndex(3)),
+            AppleScriptValue.number(output.atIndex(4))
         )
     }
 
@@ -192,58 +194,6 @@ struct AppleMusicSource: PlayerSource {
             """)
         } else if code != -600 {
             Log.warn("music: AppleScript error \(code)")
-        }
-    }
-}
-
-/// Reading values out of Apple Event descriptors.
-enum AppleScriptValue {
-
-    static func string(_ descriptor: NSAppleEventDescriptor?) -> String {
-        descriptor?.stringValue ?? ""
-    }
-
-    /// Parses a number that may use a comma as the decimal separator.
-    ///
-    /// The system locale is `en_ES`, so AppleScript renders `157.53` as
-    /// `"157,53"`. Without this the position would silently become 0 and the
-    /// karaoke would freeze.
-    static func number(_ descriptor: NSAppleEventDescriptor?) -> Double {
-        guard let raw = descriptor?.stringValue else { return 0 }
-        return Double(raw.replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
-}
-
-extension AppleScriptValue {
-
-    /// The AppleScript statement for a command. Spotify and Music use the same
-    /// words for these four.
-    ///
-    /// The position is written with a **point**: AppleScript source code always
-    /// uses a point, even when the system locale prints results with a comma.
-    static func statement(for command: PlayerCommand) -> String {
-        switch command {
-        case .playPause: return "playpause"
-        case .next: return "next track"
-        case .previous: return "previous track"
-        case .seek(let seconds):
-            return "set player position to " + String(format: "%.2f", max(0, seconds))
-        }
-    }
-
-    /// Runs a command on the app's own queue, so it never overlaps a reading.
-    static func run(_ command: PlayerCommand, app: String, on queue: DispatchQueue) {
-        let source = """
-        if application "\(app)" is running then
-            tell application "\(app)" to \(statement(for: command))
-        end if
-        """
-        queue.async {
-            var error: NSDictionary?
-            NSAppleScript(source: source)?.executeAndReturnError(&error)
-            if let error, (error[NSAppleScript.errorNumber] as? Int) != -600 {
-                Log.warn("\(app): command \(command) failed: \(error)")
-            }
         }
     }
 }
