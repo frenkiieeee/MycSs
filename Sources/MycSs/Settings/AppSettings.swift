@@ -78,6 +78,15 @@ final class AppSettings {
         set { defaults.set(newValue.rawValue, forKey: SettingKey.playerPreference) }
     }
 
+    /// Whether «Automático» also follows what plays in a browser tab (spec 014). On by
+    /// default. Choosing «Navegador» as the player reads it whatever this says. The
+    /// first time, macOS asks to let MycSs control each browser that is open (Firefox
+    /// and Zen need no permission).
+    var browserMedia: Bool {
+        get { defaults.object(forKey: SettingKey.browserMedia) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: SettingKey.browserMedia) }
+    }
+
     // MARK: - Player and leaving
 
     /// Whether the player controls (previous, play, next, progress) are shown.

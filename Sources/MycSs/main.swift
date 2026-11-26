@@ -33,6 +33,15 @@ if CommandLine.arguments.contains("--notification-selftest") {
     exit(0)
 }
 
+if CommandLine.arguments.contains("--banner-probe") {
+    Task { @MainActor in
+        await BannerProbe.run()
+        exit(0)
+    }
+    application.run()
+    exit(0)
+}
+
 if CommandLine.arguments.contains("--cover-bench") {
     Task {
         await LyricsBench.runCovers()

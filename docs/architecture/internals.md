@@ -143,14 +143,26 @@ ajustes:
   fuera cuando hacen falta o se mandan por AirDrop. Arrastrar un archivo hacia el
   notch abre la bandeja. Solo se guardan las rutas, nunca copias.
 
-**Notificaciones.** `NotificationsModel` lee (solo lectura) la base donde macOS guarda
-las notificaciones y enseña la nueva unos segundos: el notch cerrado se ensancha con el
-icono de la app y, abierto, la cabecera la muestra. Exige **Acceso total al disco**
-(Preferencias › Notch muestra si está concedido) y **no puede ocultar el aviso del
-sistema**: para verlo solo en el notch hay que poner el estilo de aviso en «Ninguno»
-en Ajustes del Sistema › Notificaciones. Probado con una base sintética con el mismo
-esquema (`--notification-selftest`); con la real, sin el permiso, el estado es
-«denegado» y no se ha podido probar aquí.
+**Notificaciones** (specs [006](../specs/006-notifications.md) y [012](../specs/012-notifications-v2.md)).
+`NotificationsModel` lee (solo lectura) la base donde macOS guarda las notificaciones
+(`NotificationDatabase`) y la vigila con `FileWatcher`: el sistema avisa al escribir en
+`db` o `db-wal` y la notificación llega al notch en unos 50 ms (un temporizador de 3 s
+queda de red). Cada app tiene una regla (notch y sistema, solo notch, solo sistema);
+con «Solo notch», `SystemBannerCloser` busca el aviso en el proceso `NotificationCenter`
+por Accesibilidad y pulsa su acción de cerrar (experimental, ver [ADR 003](../decisions/003-notificaciones.md)).
+Exige **Acceso total al disco**. La base recibe la notificación aunque macOS no
+enseñe el aviso (comprobado el 24 nov 2026).
+
+**El navegador** ([spec 014](../specs/014-browser-player.md), [ADR 007](../decisions/007-navegador-con-applescript.md)).
+`BrowserSource` ejecuta `BrowserMedia.readScript` en las pestañas por AppleScript: un
+barrido lento hasta encontrar la que suena y luego solo esa. Mientras barre, la lectura
+devuelve el último estado para no frenar al `PlayerHub`. La portada es el icono de la
+página sobre su color (`BrowserCover`), solo en memoria.
+
+**La portada del DJ de Spotify.** Spotify tarda en cambiar la URL de la portada tras un
+cambio de canción. `CoverProvider` recuerda con qué canción vio cada URL y nunca usa la
+de otra; `ThemeEngine` lee la URL ya asentada aunque la portada saliera de la caché, y
+`SyncEngine` lee el título junto al artista para que no se mezclen dos canciones.
 
 **Varias pantallas.** Con otra pantalla conectada el notch sale también en ella, como una píldora arriba en el centro (Preferencias › Notch › Pantallas: solo la de la Mac, o todas; por defecto todas). Cada pantalla enseña lo mismo, pero se abre solo en la que pones el puntero. Se añade y se quita al conectar o desconectar pantallas.
 
@@ -420,14 +432,15 @@ Sources/MycSs/
 │   ├── SettingsPreview.swift  vistas previas en vivo y «ver un estilo sin aplicarlo»
 │   └── StyleListSection.swift lista de estilos (propios y de fábrica)
 ├── Lock/                      overlay de la pantalla de bloqueo (SkyLight, un panel por pantalla)
-├── Player/                    PlayerSource, SpotifySource, AppleMusicSource, PlayerHub, NowPlaying
+├── Player/                    PlayerSource, SpotifySource, AppleMusicSource, BrowserSource, PlayerHub, NowPlaying
 ├── Lyrics/                    LRCLIB, NetEase, QQ Music, lyrics.ovh, parser, interpolador, caché HTTP
 ├── Sync/SyncEngine.swift      poll y posición interpolada a 60 fps
 ├── Render/                    pantalla de letras: OverlayRootView, LyricsView, fondo, reloj, tema, demo
 ├── Notch/                     notch: controlador, modelo, vistas (Closed, Open, HUD), widgets, QuickAdd
-│   └── Widgets/               recordatorios, temporizador, sistema, portapapeles, notificaciones
-├── Settings/                  AppSettings (+Clock, +Lyrics, +Notch), SettingKey, estilos, deshacer, restaurar
-├── Input/                     atajo global y su grabador
+│   ├── Notifications/         lector de la base, vigilante de archivos, cerrar el aviso del sistema
+│   └── Widgets/               recordatorios, temporizador, sistema, portapapeles
+├── Settings/                  AppSettings (+Clock, +Lyrics, +Notch, +Behaviour, +KeyboardLight), SettingKey, estilos, deshacer, restaurar
+├── Input/                     atajos globales, grabadores y la luz del teclado
 ├── Power/                     aserciones de energía de la pantalla
 ├── Support/                   Log, versión, comprobar actualizaciones, abrir al iniciar sesión, flags de demo
 └── Harness/                   pruebas y capturas por línea de comandos (no se usan en la app normal)

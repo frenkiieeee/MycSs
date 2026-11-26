@@ -5,7 +5,8 @@
 #   ./scripts/verify.sh
 #
 # 1. swift build
-# 2. the self test (parsers always; Spotify only if a track is playing)
+# 2. the self test (parsers always; Spotify only if a track is playing) and the
+#    notification reader against a database of its own
 # 3. (with --notch) the notch's own click test
 # 4. every relative link in docs/, CLAUDE.md and the READMEs resolves
 # 5. VERSION is a semantic version, the shell scripts parse, and no long dash
@@ -22,8 +23,18 @@ if ! swift build 2>&1 | tail -3; then fail=1; fi
 
 echo ">> self test"
 out=$(./.build/debug/MycSs --selftest 2>&1)
-echo "$out" | grep -E "OK:|FAIL|error" | head -20
+echo "   $(echo "$out" | grep -c "OK:") checks passed"
+echo "$out" | grep -E "FAIL|error" | head -20
 if echo "$out" | grep -qiE "FAIL"; then fail=1; fi
+
+echo ">> Now Playing library"
+if ! clang -fsyntax-only -fobjc-arc -Wall -Werror Support/NowPlayingAdapter/adapter.m 2>&1 | head -5; then fail=1; fi
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "   Support/NowPlayingAdapter/adapter.m does not compile"; fail=1; }
+
+echo ">> notification reader"
+out=$(./.build/debug/MycSs --notification-selftest 2>&1)
+echo "$out" | grep -E "FAIL|passed"
+if echo "$out" | grep -q "FAIL"; then fail=1; fi
 
 # The notch test opens the real notch window for a few seconds and clicks its
 # controls, so it only runs when asked:  ./scripts/verify.sh --notch

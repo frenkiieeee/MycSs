@@ -18,8 +18,8 @@
 
 ## What it does
 
-- **Lyrics on the lock screen** for Spotify and Apple Music, highlighted word by word, with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (shortcut ⌃⌥L, menu bar, or after idle time).
-- **A notch** with cover and visualiser, the title on song change, a volume, brightness and keyboard light indicator (the light has its own shortcut, Option+F2 and Option+F1, which you can change), notifications, a file shelf and widgets (calendar, reminders, timer, system, clipboard). It can show on other screens too.
+- **Lyrics on the lock screen** for Spotify, Apple Music and browser tabs (Chrome, Safari, Arc, Firefox, Zen...), highlighted word by word, with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (shortcut ⌃⌥L, menu bar, or after idle time).
+- **A notch** with cover and visualiser, the title on song change, a volume, brightness and keyboard light indicator (the light has its own shortcut, Option+F2 and Option+F1, which you can change), notifications (instant, with a rule per app: notch, system or both), a file shelf and widgets (calendar, reminders, timer, system, clipboard). It can show on other screens too.
 - **Customisable**: fonts, highlight effect, clock, backgrounds, animations, notch size and motion. Everything is saved as **styles** you can preview before applying.
 
 ## Requirements
@@ -45,14 +45,15 @@ After an update macOS may ask again for Accessibility and Full Disk Access.
 | Permission | Used for | Required |
 |---|---|---|
 | Automation (Spotify, Music) | Reading the current song | Yes |
-| Accessibility | Volume and brightness keys in the notch, and the keyboard light shortcut | No |
+| Accessibility | Volume and brightness keys in the notch, the keyboard light shortcut, and closing the system banner of apps set to "notch only" | No |
+| Automation (browsers) | Reading and controlling the tab that plays (needs "Allow JavaScript from Apple Events" in Chrome, Safari and the like; Firefox and Zen need nothing) | No |
 | Full Disk Access | Showing other apps' notifications in the notch | No |
 | Calendars, Reminders | The calendar and reminders widgets | No |
 | System audio | A visualiser that follows the real rhythm | No |
 
 ## Privacy
 
-Everything runs on your Mac. Only the song title, artist and duration are sent, to LRCLIB, NetEase and QQ Music, to find the lyrics. The update check runs only when you press the button. No analytics, no accounts.
+Everything runs on your Mac. Only the song title, artist and duration are sent, to LRCLIB, NetEase and QQ Music, to find the lyrics, and the title and artist to Deezer and Apple's catalogue when the player has no cover. With the browser on, the page's icon is downloaded from that site, without cookies. The update check runs only when you press the button. No analytics, no accounts.
 
 ## Contributing
 

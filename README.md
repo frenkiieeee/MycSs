@@ -19,9 +19,9 @@
 
 ## Qué hace
 
-**Letras en la pantalla de bloqueo.** Al bloquear la Mac aparece la letra de la canción que suena en Spotify o Apple Music, resaltada **palabra a palabra** al ritmo de la voz, con la portada, un reloj y un fondo animado que toma los colores del álbum. También se abre como salvapantallas con un atajo (por defecto ⌃⌥L), desde el menú de la barra o tras un rato sin usar la Mac.
+**Letras en la pantalla de bloqueo.** Al bloquear la Mac aparece la letra de la canción que suena en Spotify, Apple Music o una pestaña del navegador, resaltada **palabra a palabra** al ritmo de la voz, con la portada, un reloj y un fondo animado que toma los colores del álbum. También se abre como salvapantallas con un atajo (por defecto ⌃⌥L), desde el menú de la barra o tras un rato sin usar la Mac.
 
-**Un notch con música y widgets.** El notch muestra la portada y un visualizador mientras suena algo, el título al cambiar de canción, el volumen, el brillo y la luz del teclado (con un atajo propio, ⌥F2 y ⌥F1, que puedes cambiar), las notificaciones, y se abre con el puntero hasta un panel con el reproductor y widgets: calendario, recordatorios, temporizador, batería y sistema, portapapeles y una estantería para archivos. También sale en otras pantallas.
+**Un notch con música y widgets.** El notch muestra la portada y un visualizador mientras suena algo, el título al cambiar de canción, el volumen, el brillo y la luz del teclado (con un atajo propio, ⌥F2 y ⌥F1, que puedes cambiar), las notificaciones (al instante, y app por app en el notch, en el sistema o en los dos), y se abre con el puntero o con un clic hasta un panel con el reproductor y widgets: calendario, recordatorios, temporizador, batería y sistema, portapapeles y una estantería para archivos. También sale en otras pantallas.
 
 **Tuyo hasta el último detalle.** Fuente y efecto de resaltado, reloj (que puede ocultarse solo), fondos, animaciones de entrada y de cambio de canción, tamaño y movimiento del notch, indicadores de volumen... Todo se guarda como **estilos** (de fábrica o propios) que se pueden ver en una vista previa antes de aplicarlos.
 
@@ -30,10 +30,10 @@
 | Área | Qué incluye |
 |---|---|
 | Letras | Palabra a palabra (LRCLIB, NetEase y QQ Music), tema desde la portada, fondo animado, profundidad como Apple Music, cambio de canción animado con o sin letra |
-| Reproductores | Spotify y Apple Music, sin APIs privadas (AppleScript). Controles de reproducción bajo la portada |
+| Reproductores | Spotify, Apple Music y el navegador (Chrome, Safari, Brave, Edge, Arc, Vivaldi, **Firefox y Zen**; el icono de la pestaña es la portada), sin APIs privadas (AppleScript). Controles de reproducción y un clic para pasar de uno a otro |
 | Pantalla | Reloj configurable con ocultación automática, marca de agua `@frenkiieeee` discreta, Esc o clic fuera para salir |
-| Notch | Música, volumen, brillo y luz del teclado (barra, deslizador, anillo, segmentos), notificaciones, estantería, varias pantallas, animación de canción nueva configurable |
-| Widgets | Calendario (crea eventos y recordatorios pulsando la fecha), recordatorios, temporizador, sistema, portapapeles |
+| Notch | Música, volumen, brillo y luz del teclado (barra, deslizador, anillo, segmentos), notificaciones con reglas por app e historial, estantería, varias pantallas, tiempos de apertura, cierre y arrastre a tu gusto |
+| Widgets | Calendario (crea eventos y recordatorios pulsando la fecha), recordatorios, temporizador, sistema, portapapeles, notificaciones |
 | Ajustes | Vistas previas en vivo, estilos propios, restaurar valores con «Deshacer», abrir al iniciar sesión, buscar actualizaciones |
 
 ## Requisitos
@@ -95,8 +95,9 @@ MycSs pide cada permiso **solo cuando lo necesita** y funciona sin los opcionale
 | Permiso | Para qué | Cuándo se pide |
 |---|---|---|
 | Automatización (Spotify, Música) | Leer la canción y la posición | Al reproducir por primera vez. **Imprescindible** |
-| Accesibilidad | Teclas de volumen y brillo en el notch, y el atajo de la luz del teclado | Al activar el indicador del notch. Opcional |
-| Acceso total al disco | Ver las notificaciones de otras apps en el notch | Si lo activas en Notch > Widgets (Notificaciones). Opcional |
+| Accesibilidad | Teclas de volumen y brillo en el notch, el atajo de la luz del teclado y cerrar el aviso del sistema de las apps en «Solo notch» | Al activar el indicador del notch. Opcional |
+| Automatización (navegadores) | Leer y controlar la pestaña que suena en Chrome, Safari y similares. Firefox y Zen no piden nada | La primera vez que MycSs lee un navegador abierto (se puede quitar en General › Reproductor). Opcional |
+| Acceso total al disco | Ver las notificaciones de otras apps en el notch | Si lo activas en Notch > Avisos. Opcional |
 | Calendarios | Eventos del widget de calendario | Al abrir ese widget. Opcional |
 | Recordatorios | Widget de recordatorios | Al abrir ese widget. Opcional |
 | Audio del sistema | Visualizador que sigue el ritmo real | Si activas «seguir el ritmo». Opcional |
@@ -106,6 +107,8 @@ MycSs pide cada permiso **solo cuando lo necesita** y funciona sin los opcionale
 Todo ocurre en tu Mac. Lo único que sale es:
 
 - La **búsqueda de la letra**: título, artista y duración de la canción a [LRCLIB](https://lrclib.net), NetEase Cloud Music y QQ Music. Las letras se guardan en `~/Library/Caches/MycSs`; no se redistribuyen.
+- La **búsqueda de la portada** cuando el reproductor no la da: título y artista a los catálogos públicos de Deezer y Apple. Se guardan en `~/Library/Caches/MycSs/Covers2`.
+- Con el navegador activado, el **icono de la página** que suena se descarga de esa misma web, sin cookies. De una pestaña solo se busca letra si la página dice el artista (los sitios de música lo hacen); el título de cualquier otra página no sale de tu Mac.
 - La comprobación de versión, **solo si pulsas** «Buscar actualizaciones» (una consulta a la API pública de GitHub, sin datos tuyos).
 
 No hay análisis de uso, cuentas ni conexiones en segundo plano. Los eventos, recordatorios y notificaciones se leen en local y no se envían a ningún sitio.
@@ -114,6 +117,8 @@ No hay análisis de uso, cuentas ni conexiones en segundo plano. Los eventos, re
 
 - **No aparece la letra al bloquear.** Mira el registro: `tail -f ~/Library/Logs/MycSs.log` (o Preferencias > Acerca de > Abrir el registro). Comprueba que la canción suena y que concediste Automatización.
 - **Una canción no tiene letra.** Algunas no están en ninguna fuente; MycSs reintenta y centra la portada. El banco de pruebas (`MycSs --lyrics-bench`) mide cuántas canciones conocidas encuentra.
+- **El navegador no aparece.** Activa en él «Permitir JavaScript desde eventos de Apple» (Chrome: Ver › Opciones para desarrolladores; Safari: menú Desarrollo). General › Reproductor dice qué falta en cada uno. Firefox y Zen no necesitan ese ajuste.
+- **Una canción tiene la portada de otra.** General › Reproductor › «Borrar las guardadas»; se vuelven a buscar.
 - **Se perdieron Accesibilidad o Acceso total al disco tras actualizar.** Es normal sin notarización: vuelve a concederlos en Ajustes del Sistema > Privacidad y seguridad. Para Acceso total al disco, MycSs no aparece solo en la lista: añádelo con «+».
 - **El notch no se ve en una pantalla.** Notch > «Pantallas» elige solo la del Mac o todas.
 - **No arranca / se cierra.** Mira `~/Library/Logs/DiagnosticReports` y abre una incidencia con el registro.

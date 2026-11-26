@@ -7,6 +7,21 @@ All notable changes to MycSs are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- The browser as a player: what plays in a tab of Chrome, Safari, Brave, Edge, Arc,
+  Vivaldi, Firefox, Zen, Floorp, LibreWolf or Waterfox shows and can be controlled like
+  Spotify, with the tab's icon as the cover. "Automático" includes it (General, Player,
+  can be turned off; choosing "Navegador" always reads it); Chrome and
+  the like need "Allow JavaScript from Apple Events", Firefox and Zen need nothing (they
+  are read from the system's Now Playing, with a small library of ours that `perl`
+  loads, and the favicon comes from the browser's saved session). A click on the player's icon on the cover (or "Reproductor" in the menu)
+  moves to the next player that has something.
+- Notifications per app: in the notch and the system, the notch only (the system's
+  banner is closed with Accessibility, experimental) or the system only, with a rule
+  for new apps. Several in a row from one app are counted, the text can be hidden,
+  and a new "Notificaciones" widget keeps the last ones. Their own settings tab, "Avisos".
+- Notch timing: open on hover or on click, and how long it waits to open and to close.
+  Dragging files: on or off, how long to hold them over the notch, and how wide the zone is.
+- A button to clear the saved covers (General, Player).
 - A shortcut of its own for the keyboard light: Option+F2 raises it and Option+F1
   lowers it (it works with the brightness keys or with plain F keys). Each shortcut
   can be recorded again, cleared or restored. The change shows in the notch, and on
@@ -18,9 +33,25 @@ All notable changes to MycSs are listed here. The format follows
   can be turned off and has six animations (fade, slide, grow, pop, drop, blur).
 
 ### Changed
+- Notifications reach the notch as soon as macOS stores them (about 50 ms; before, up
+  to a second): the database is watched instead of read every second.
 - With the notch open, a new song animates: the cover fades in over the old one
   with a small beat, and the title and artist are replaced with the song change
   animation (also for songs skipped in a row).
+
+### Fixed
+- The open notch no longer shifts when the notifications widget is shown: it is one row
+  shorter, titled "Avisos", and its "Borrar" button is in the header.
+- With Spotify's DJ, a song could keep the previous singer's cover for good: a cover
+  found in the cache left no URL to compare with, so Spotify's late URL was taken as the
+  new song's and saved. Every player URL is now remembered with its song, the title is
+  read together with the artist, and the old cache is dropped once. The DJ's own
+  segments ("Up next", a `spotify:media:` item) are no longer searched for lyrics or
+  covers, and each one has its own cover key.
+- The log no longer grows without bound: one repeated lock screen line is written once
+  every 500 times, and past 5 MB the file moves to `MycSs.log.1`.
+- The shelf opened by itself with any click and hold near the notch after a first drag
+  of files (the system keeps the last dragged files); now only a real drag counts.
 
 ## [0.2.5] - 2026-11-16
 

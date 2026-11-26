@@ -420,11 +420,23 @@ struct GeneralSettingsPage: View {
 
                 Text("""
                 En «Automático» MycSs sigue al reproductor que esté sonando, y se \
-                queda con el mismo mientras siga sonando. macOS pide permiso la \
-                primera vez que lee Spotify o Apple Music.
+                queda con el mismo mientras siga sonando. Con varios a la vez, el \
+                icono de la portada en el notch (o «Reproductor» en el menú) pasa al \
+                siguiente. macOS pide permiso la primera vez que lee cada uno.
                 """)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+                Toggle("Incluir el navegador en «Automático»", isOn: $settings.browserMedia)
+                if settings.browserMedia {
+                    BrowserStatusList()
+                }
+
+                LabeledContent("Portadas") {
+                    Button("Borrar las guardadas") {
+                        Task { await CoverProvider.shared.clearCache() }
+                    }
+                }
             }
 
             Section("Letras en pantalla completa") {
@@ -692,4 +704,49 @@ struct AboutSettingsPage: View {
 final class FontFilter {
     static let shared = FontFilter()
     var text: String = ""
+}
+
+/// The browsers that are installed, and whether each one lets MycSs read its tabs.
+private struct BrowserStatusList: View {
+    @Bindable var access = BrowserAccess.shared
+
+    private var installed: [BrowserSource.Browser] {
+        BrowserSource.supported.filter {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
+        }
+    }
+
+    var body: some View {
+        ForEach(installed) { browser in
+            LabeledContent(browser.name.replacingOccurrences(of: " Browser", with: "")) {
+                switch access.state(browser) {
+                case .working: Text("Funciona").foregroundStyle(Color.green)
+                case .needsJavaScript: Text("Falta activar JavaScript").foregroundStyle(Color.orange)
+                case .denied: Text("Falta el permiso").foregroundStyle(Color.orange)
+                case .unknown: Text("Ábrelo y pon algo a sonar").foregroundStyle(.secondary)
+                }
+            }
+        }
+        if installed.contains(where: { access.state($0) == .denied }) {
+            Button("Abrir Automatización…") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+        DisclosureGroup("Cómo activarlo") {
+            Text("""
+            Cada navegador tiene que dejar que MycSs lea la pestaña que suena. **Chrome, Brave, \
+            Edge y Vivaldi:** menú Ver › Opciones para desarrolladores › «Permitir JavaScript \
+            desde eventos de Apple». **Safari:** Ajustes › Avanzado › «Mostrar funciones para \
+            desarrolladores web» y luego Desarrollo › «Permitir JavaScript desde eventos de \
+            Apple». La primera vez macOS pregunta si MycSs puede controlar el navegador. La \
+            portada es el icono de la página. **Zen, Firefox y derivados** no necesitan nada: \
+            MycSs los lee del control multimedia del sistema (título, artista y botones) y \
+            saca el icono de la pestaña de su sesión guardada.
+            """)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+    }
 }

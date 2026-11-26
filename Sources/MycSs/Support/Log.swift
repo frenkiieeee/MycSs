@@ -4,8 +4,9 @@ import Foundation
 /// through here: lock state transitions, SkyLight symbol resolution, lyrics
 /// fetching, and sync timing.
 ///
-/// Writes to `~/Library/Logs/MycSs.log`. Log lines are cheap and the file is
-/// truncated on launch so a long-running session cannot grow without bound.
+/// Writes to `~/Library/Logs/MycSs.log`. When the file passes 5 MB it is moved to
+/// `MycSs.log.1` (the one before is dropped) and a new one starts, so it cannot
+/// grow without bound.
 enum Log {
     private static let url: URL = {
         let base = FileManager.default.homeDirectoryForCurrentUser
@@ -33,6 +34,24 @@ enum Log {
     /// for every line costs three system calls, and the app logs often enough
     /// (every lock, every track change) for that to show up.
     private static var handle: FileHandle?
+    private static var linesSinceCheck = 0
+    private static let maximumSize: UInt64 = 5_000_000
+
+    /// On the queue: every few hundred lines, moves a log that is too big aside.
+    /// True when it did (the handle has to be opened again).
+    private static func rotateIfNeeded(_ file: URL) -> Bool {
+        linesSinceCheck += 1
+        guard handle == nil || linesSinceCheck >= 500 else { return false }
+        linesSinceCheck = 0
+        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? UInt64) ?? 0
+        guard size > maximumSize else { return false }
+        try? handle?.close()
+        handle = nil
+        let old = file.appendingPathExtension("1")
+        try? FileManager.default.removeItem(at: old)
+        try? FileManager.default.moveItem(at: file, to: old)
+        return true
+    }
 
     static func line(_ message: String) {
         // Local time with sub-second precision: the log is read by a human
@@ -43,7 +62,8 @@ enum Log {
             let destination = overridePath.map { URL(fileURLWithPath: $0) } ?? url
             guard let data = text.data(using: .utf8) else { return }
 
-            if handle == nil {
+            let rotated = overridePath == nil && rotateIfNeeded(destination)
+            if handle == nil || rotated {
                 if !FileManager.default.fileExists(atPath: destination.path) {
                     FileManager.default.createFile(atPath: destination.path, contents: nil)
                 }

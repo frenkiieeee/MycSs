@@ -1,6 +1,6 @@
 # MycSs
 
-App de barra de menú para macOS que muestra letras sincronizadas (Spotify hoy, Apple Music y notch en el roadmap) sobre la pantalla de bloqueo. Proyecto personal de Frenkiieeee. Objetivo: una capa creativa y personalizable para la Mac.
+App de barra de menú para macOS que muestra letras sincronizadas (Spotify, Apple Music y pestañas del navegador) sobre la pantalla de bloqueo, con un notch de música, widgets y notificaciones. Proyecto personal de Frenkiieeee. Objetivo: una capa creativa y personalizable para la Mac.
 
 Antes de tocar nada lee `docs/README.md` (índice). La hoja de ruta y las decisiones viven en `docs/`, no aquí.
 
@@ -50,7 +50,13 @@ Ejecuta el binario del `.app` (no `.build/debug/MycSs`) cuando pruebes Spotify o
 - `--lyrics-bench` mide cuántas canciones consiguen letra (`--hard`, `--providers`, `--parallel=1 --pause=12`, `--limit=N`). Úsalo antes y después de tocar `Lyrics/`.
 - `--notch-snapshot /tmp/n --demo` dibuja el notch cerrado, en vistazo y abierto (`/tmp/n-closed.png`, `-peek.png`, `-open.png`, `-shelf.png`, `-hud-volume.png`, `-hud-brightness.png`). La portada de la demo es un cuadrado de colores; con `--demo-mascot` es la mascota.
 - `--settings-snapshot /tmp/sp --demo` dibuja las vistas previas de los ajustes (overlay con cada estilo y notch en cada momento) y comprueba que «Deshacer» deja los ajustes como estaban. Las ventanas reales no se pueden capturar con la Mac bloqueada.
-- `--cover-bench` mide cuántas portadas se encuentran; `--notification-selftest` prueba el lector de notificaciones con una base sintética.
+- `--cover-bench` mide cuántas portadas se encuentran; `--notification-selftest` prueba el lector de notificaciones con una base sintética (llegada al instante, reglas por app, historial).
+- **Recompilar con la app abierta le quita los permisos** (Acceso total al disco, Accesibilidad) hasta que se reinicia: macOS compara el proceso con el binario en disco. Tras `./build-app.sh`, cierra y abre MycSs antes de concluir que falta un permiso.
+- Un binario lanzado desde la terminal tiene los permisos **de la terminal**, no los de MycSs. Para probar con los de la app: `open -n -a "$PWD/MycSs.app" --stdout /tmp/p.txt --args --banner-probe`.
+- `--banner-probe` envía una notificación de prueba y vuelca durante 20 s el árbol de Accesibilidad de los avisos del sistema, para ajustar `SystemBannerCloser` a otra versión de macOS (spec 012).
+- Las notificaciones se leen al escribirse la base (`FileWatcher` sobre `db` y `db-wal`), no con un temporizador. Cerrar el aviso del sistema es experimental y deja líneas `banner:` en el log.
+- El navegador (`BrowserSource`, spec 014, ADR 007) ejecuta un script en la pestaña por AppleScript; sus scripts se prueban en `--selftest-pure` con JavaScriptCore y una página de mentira. «Automático» lo incluye (ajuste `browserMedia`, activo por defecto; elegir «Navegador» lo lee siempre): la primera vez macOS pide la Automatización de cada navegador abierto, salvo Firefox y Zen. No mandes a los servicios de letras el título de una pestaña sin artista. Firefox, Zen y derivados no se pueden scriptar: se leen del Now Playing del sistema con `Support/NowPlayingAdapter/adapter.m`, que carga `/usr/bin/perl` (ADR 008). `build-app.sh` compila esa librería dentro del `.app`; con `swift build` se compila sola en `/tmp` (`SystemNowPlaying.libraryURL`). El favicon sale de `recovery.jsonlz4` de su perfil (`FirefoxSession`).
+- Un arrastre de archivos es real solo si la mesa de arrastre cambió **después** de pulsar el botón (`DragTracker`): esa mesa no se vacía al acabar un arrastre.
 - **No compares con `statusItem.isVisible` dentro de un observador de `UserDefaults`**: poner `isVisible` escribe en `UserDefaults` y llama al observador dentro del setter, en bucle hasta desbordar la pila. Recuerda el último valor puesto.
 - `SettingsOverride.values` solo se pone durante un `ImageRenderer` síncrono (ver estilos sin aplicar); nunca lo dejes puesto entre dos turnos del run loop.
 - Los ajustes no son observables por SwiftUI: una vista previa recibe `revision` para redibujarse, y **cada página de ajustes lee `revision.value` en su `body`**; si no, el control no refleja el clic aunque el valor se guarde. Una página nueva debe hacerlo también.

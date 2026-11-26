@@ -26,6 +26,9 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 4b | Crear eventos y recordatorios desde el notch | [009](specs/009-quick-add.md) |
 | 5 | Versión, DMG, Homebrew, ajustes ordenados y restaurar | [010](specs/010-release-and-settings.md) |
 | 4c | Luz del teclado con un atajo propio (⌥F2 y ⌥F1) | [011](specs/011-keyboard-light.md) |
+| 4d | Notificaciones al instante, por app y sin el aviso doble | [012](specs/012-notifications-v2.md) |
+| 4e | Apertura, cierre y arrastre del notch a medida | [013](specs/013-notch-timing-and-drag.md) |
+| 1d | El navegador como reproductor | [014](specs/014-browser-player.md) |
 | 6 | Notarización con Developer ID | pendiente |
 
 ## Cómo usarlos con agentes

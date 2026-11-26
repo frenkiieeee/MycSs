@@ -179,6 +179,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         displayItem.submenu = displayMenu
         menu.addItem(displayItem)
 
+        // Which player to follow, and a quick move to the next one (spec 014).
+        let playerItem = NSMenuItem(title: "Reproductor", action: nil, keyEquivalent: "")
+        let playerMenu = NSMenu()
+        let next = NSMenuItem(title: "Pasar al siguiente", action: #selector(nextPlayer), keyEquivalent: "")
+        next.target = self
+        playerMenu.addItem(next)
+        playerMenu.addItem(.separator())
+        for preference in PlayerHub.Preference.allCases {
+            let item = NSMenuItem(title: preference.title, action: #selector(setPlayer(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = preference.rawValue
+            item.state = AppSettings.shared.playerPreference == preference ? .on : .off
+            playerMenu.addItem(item)
+        }
+        playerItem.submenu = playerMenu
+        menu.addItem(playerItem)
+
         // The lyrics as a screensaver. The shortcut is shown next to it.
         let lyrics = NSMenuItem(
             title: "Letras",
@@ -224,6 +241,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.overlayEnabled = !settings.overlayEnabled
         Log.line("menu: overlay enabled = \(settings.overlayEnabled)")
         // Rebuild the menu so the checkmark reflects the new state.
+        installMenu()
+    }
+
+    @MainActor @objc private func nextPlayer() {
+        overlayController.sharedModel.cycleSource()
+        // The preference may have moved with it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.installMenu() }
+    }
+
+    @objc private func setPlayer(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let preference = PlayerHub.Preference(rawValue: raw)
+        else { return }
+        AppSettings.shared.playerPreference = preference
+        if preference == .browser { AppSettings.shared.browserMedia = true }
+        Log.line("menu: player = \(preference.rawValue)")
         installMenu()
     }
 
