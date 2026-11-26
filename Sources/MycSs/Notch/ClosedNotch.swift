@@ -50,6 +50,11 @@ struct ClosedNotch: View {
                 .frame(height: NotchGeometry.peekRow, alignment: .top)
                 .transition(.blurReplace.combined(with: .opacity))
             }
+            if layout.kind == .timer {
+                TimerRow(timer: services.timer)
+                    .frame(height: NotchGeometry.timerRow, alignment: .top)
+                    .transition(.blurReplace.combined(with: .opacity))
+            }
             if layout.kind == .notification, let notification = notch.notification {
                 VStack(spacing: 1) {
                     Text(notification.shownHeadline)
@@ -92,14 +97,10 @@ struct ClosedNotch: View {
             }
             .transition(.blurReplace)
         case .wings, .peek:
-            if services.timer.isActive, !(notch.isListening && model.track.hasTrack && AppSettings.shared.notchWings) {
-                Image(systemName: "timer")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(NotchPalette.accent(model))
-                    .transition(.blurReplace)
-            } else {
-                cover
-            }
+            cover
+        case .timer:
+            // The time is in the row below; the sides keep the music.
+            if notch.isListening, model.track.hasTrack, AppSettings.shared.notchWings { cover }
         default:
             EmptyView()
         }
@@ -159,10 +160,11 @@ struct ClosedNotch: View {
             }
             .transition(.blurReplace)
         case .wings, .peek:
-            if services.timer.isActive {
-                TimerBadge(timer: services.timer, accent: accent)
-                    .transition(.blurReplace)
-            } else {
+            Visualiser(active: model.isPlayingNow, tint: accent)
+                .frame(width: 20 * NotchGeometry.closedText, height: 16 * NotchGeometry.closedText)
+                .transition(.blurReplace)
+        case .timer:
+            if notch.isListening, model.track.hasTrack, AppSettings.shared.notchWings {
                 Visualiser(active: model.isPlayingNow, tint: accent)
                     .frame(width: 20 * NotchGeometry.closedText, height: 16 * NotchGeometry.closedText)
                     .transition(.blurReplace)
@@ -200,19 +202,23 @@ struct NotificationIcon: View {
     }
 }
 
-/// The time left on the timer, small, with its ring.
-struct TimerBadge: View {
+/// The time left on the timer, in a row under the cut-out (like a notification's
+/// text), so it fits however small the notch is drawn.
+struct TimerRow: View {
     @Bindable var timer: TimerModel
-    let accent: Color
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
+            Image(systemName: timer.state == .paused ? "pause.fill" : "timer")
+                .font(.system(size: 11 * NotchGeometry.closedText, weight: .semibold))
+                .foregroundStyle(brandYellow)
             Text(timer.text)
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(.system(size: 15 * NotchGeometry.closedText, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(timer.state == .paused ? .white.opacity(0.55) : .white)
                 .contentTransition(.numericText())
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
         }
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
     }
 }
