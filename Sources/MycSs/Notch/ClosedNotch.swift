@@ -52,11 +52,11 @@ struct ClosedNotch: View {
             }
             if layout.kind == .notification, let notification = notch.notification {
                 VStack(spacing: 1) {
-                    Text(notification.headline)
+                    Text(notification.shownHeadline)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    Text(notification.detail)
+                    Text(notification.shownDetail)
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
@@ -127,11 +127,25 @@ struct ClosedNotch: View {
             }
         case .notification:
             if let notification = notch.notification {
-                Text(notification.appName)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .lineLimit(1)
-                    .transition(.blurReplace)
+                HStack(spacing: 5) {
+                    Text(notification.appName)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                    if notch.notificationCount > 1 {
+                        // Several in a row from the same app.
+                        Text("\(notch.notificationCount)")
+                            .font(.system(size: 9.5, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 5)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Capsule().fill(.white.opacity(0.9)))
+                            .contentTransition(.numericText(value: Double(notch.notificationCount)))
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .animation(NotchMotion.swap, value: notch.notificationCount)
+                .transition(.blurReplace)
             }
         case .peek where AppSettings.shared.notchPeekStyle == .sides:
             let boost = NotchGeometry.peekBoost

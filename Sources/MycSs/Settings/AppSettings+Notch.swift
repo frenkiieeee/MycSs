@@ -324,6 +324,8 @@ extension AppSettings {
     /// What can sit on the right of the open notch's home page.
     enum NotchWidget: String, CaseIterable, Identifiable {
         case calendar, reminders, timer, system, clipboard
+        /// The last notifications (spec 012).
+        case notifications
 
         var id: String { rawValue }
 
@@ -334,6 +336,7 @@ extension AppSettings {
             case .timer: return "Temporizador"
             case .system: return "Batería y sistema"
             case .clipboard: return "Portapapeles"
+            case .notifications: return "Notificaciones"
             }
         }
 
@@ -344,6 +347,7 @@ extension AppSettings {
             case .timer: return "timer"
             case .system: return "battery.75percent"
             case .clipboard: return "doc.on.clipboard"
+            case .notifications: return "bell.badge"
             }
         }
     }

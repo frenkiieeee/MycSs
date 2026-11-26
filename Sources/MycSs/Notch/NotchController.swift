@@ -43,6 +43,10 @@ final class NotchController {
     /// Since when the pointer is away from the open notch, or on the closed one.
     private var awaySince: Date?
     private var insideSince: Date?
+    /// Since when files have been held over the closed notch.
+    private var dragSince: Date?
+    /// Tells a real drag of files from an old one (spec 013).
+    let dragTracker = DragTracker()
     /// When the keys were last tried to be taken, to not insist every tick.
     private var lastTapAttempt = Date.distantPast
     /// Since when nothing has been playing.
@@ -207,6 +211,7 @@ final class NotchController {
         hudOnly = false
         wireHUD()
         volumeWatcher.start()
+        dragTracker.start()
         Log.line("notch: shown on display \(id), cut-out \(Int(geometry.notch.width))x\(Int(geometry.notch.height))")
     }
 
@@ -217,6 +222,7 @@ final class NotchController {
         }
         services.notifications.stop()
         services.clipboard.stop()
+        dragTracker.stop()
         AudioReactor.shared.stop()
         model.setNotchActive(false)
         model.notchExpanded = false
@@ -406,9 +412,11 @@ final class NotchController {
     /// it closes an open notch the pointer has left, opens a closed one the
     /// pointer rests on, and opens the shelf when files are dragged to it.
     private func reconcilePointer() {
+        let settings = AppSettings.shared
+        let dragging = settings.notchDragOpen && dragTracker.update()
         // Open, the notch that matters is the one that is open; closed, the one under the pointer.
         let openOn = notch.openDisplay == 0 ? displayID : notch.openDisplay
-        let under = notch.isOpen ? nil : displayUnderPointer(padding: 4)
+        let under = notch.isOpen ? nil : displayUnderPointer(padding: dragging ? settings.notchDragZone.padding : 4)
         let inside = notch.isOpen
             ? currentZone(padding: 12, display: openOn).contains(NSEvent.mouseLocation)
             : under != nil
@@ -416,12 +424,13 @@ final class NotchController {
 
         if notch.isOpen {
             insideSince = nil
+            dragSince = nil
             if inside {
                 awaySince = nil
             } else {
                 awaySince = awaySince ?? Date()
-                if Date().timeIntervalSince(awaySince!) > 0.5,
-                   !isDraggingFiles(), !notch.shelfTargeted {
+                if Date().timeIntervalSince(awaySince!) > settings.notchCloseDelay + 0.35,
+                   !dragTracker.isDragging, !notch.shelfTargeted {
                     notch.close("the pointer is away")
                 }
             }
@@ -429,14 +438,26 @@ final class NotchController {
             awaySince = nil
             guard inside else {
                 insideSince = nil
+                dragSince = nil
                 return
             }
-            if isDraggingFiles() {
-                notch.open(tab: .shelf)
+            if dragging {
+                // Files held over the notch for a moment open the shelf.
+                insideSince = nil
+                dragSince = dragSince ?? Date()
+                if Date().timeIntervalSince(dragSince!) >= settings.notchDragDelay {
+                    dragSince = nil
+                    notch.open(tab: .shelf)
+                }
+                return
+            }
+            dragSince = nil
+            guard settings.notchOpenTrigger == .hover, NSEvent.pressedMouseButtons & 1 == 0 else {
+                insideSince = nil
                 return
             }
             insideSince = insideSince ?? Date()
-            if Date().timeIntervalSince(insideSince!) > 0.3 {
+            if Date().timeIntervalSince(insideSince!) > settings.notchOpenDelay + 0.25 {
                 notch.open(haptic: true)
             }
         }
@@ -471,15 +492,5 @@ final class NotchController {
         let point = NSEvent.mouseLocation
         let ids = [displayID] + extras.map(\.id)
         return ids.first { currentZone(padding: padding, display: $0).contains(point) }
-    }
-
-    /// Whether the user is dragging files right now. The drag pasteboard keeps its
-    /// contents after the drag ends, so the button has to be down as well.
-    private func isDraggingFiles() -> Bool {
-        guard NSEvent.pressedMouseButtons & 1 != 0 else { return false }
-        return NSPasteboard(name: .drag).canReadObject(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        )
     }
 }

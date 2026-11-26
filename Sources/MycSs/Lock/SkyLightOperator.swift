@@ -383,7 +383,16 @@ final class SkyLight {
         // Presenting it again is what makes it appear.
         if currentLockSpace != 0, !isOnScreen(window) {
             present(window, in: currentLockSpace)
-            Log.line("skylight: the window was not being drawn, presented again")
+            // It can repeat many times a second while the display sleeps: the log
+            // says it once per Space and then every 500 times.
+            if redrawSpace != currentLockSpace {
+                redrawSpace = currentLockSpace
+                redrawCount = 0
+            }
+            if redrawCount % 500 == 0 {
+                Log.line("skylight: the window was not being drawn, presented again (\(redrawCount + 1) times in this space)")
+            }
+            redrawCount += 1
             return true
         }
 
@@ -464,6 +473,9 @@ final class SkyLight {
 
     /// The Space the overlay is currently in.
     private var currentLockSpace: UInt64 = 0
+    /// How many times the window was presented again in `redrawSpace`, for the log.
+    private var redrawSpace: UInt64 = 0
+    private var redrawCount = 0
 
 
     // MARK: - A Space of its own, for windows that stay put

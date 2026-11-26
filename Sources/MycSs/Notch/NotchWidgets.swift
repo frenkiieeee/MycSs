@@ -23,6 +23,7 @@ struct WidgetBlock: View {
                 case .timer: TimerWidget(timer: services.timer)
                 case .system: SystemWidget(system: services.system)
                 case .clipboard: ClipboardWidget(clipboard: services.clipboard)
+                case .notifications: NotificationsWidget(notifications: services.notifications)
                 }
             }
             .id(current)
@@ -97,10 +98,33 @@ private struct WidgetHeader: View {
             .buttonStyle(NotchPress(scale: 0.94))
             .probe("calendarTitle")
             .animation(NotchMotion.swap, value: services.agenda.selectedOffset)
+        case .notifications:
+            HStack(spacing: 6) {
+                Text("Avisos")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if !services.notifications.history.isEmpty {
+                    Button {
+                        services.notifications.clearHistory()
+                        NotchHaptics.tick()
+                    } label: {
+                        Image(systemName: "trash.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .buttonStyle(NotchPress(scale: 0.88))
+                    .help("Borrar el historial")
+                    .probe("notification.clear")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(NotchMotion.swap, value: services.notifications.history.isEmpty)
         default:
             Text(current.title)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
+                .lineLimit(1)
         }
     }
 }
@@ -653,6 +677,60 @@ private struct ClipboardWidget: View {
                     }
                 }
                 .animation(NotchMotion.swap, value: clipboard.entries)
+                .padding(.top, 2)
+            }
+        }
+    }
+}
+
+// MARK: - Notifications
+
+/// The last notifications that reached the notch. A click opens the app.
+private struct NotificationsWidget: View {
+
+    @Bindable var notifications: NotificationsModel
+
+    var body: some View {
+        Group {
+            if !AppSettings.shared.notchNotifications {
+                EmptyNote(text: "Activa las notificaciones en Ajustes › Notch › Avisos")
+            } else if notifications.history.isEmpty {
+                EmptyNote(text: "Las notificaciones que lleguen aparecerán aquí")
+            } else {
+                // Three rows is what fits under the header: more would push the whole
+                // open notch out of place.
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(notifications.history.prefix(3).enumerated()), id: \.element.id) { index, item in
+                        Button {
+                            notifications.open(item)
+                            NotchHaptics.tick()
+                        } label: {
+                            HStack(spacing: 7) {
+                                NotificationIcon(notification: item, size: 15)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(item.shownHeadline)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(index == 0 ? 0.95 : 0.75))
+                                    Text(item.appName)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                }
+                                .lineLimit(1)
+                                Spacer(minLength: 0)
+                                Text(item.date, format: .dateTime.hour().minute())
+                                    .font(.system(size: 9.5, weight: .medium).monospacedDigit())
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .frame(height: 27)
+                            .padding(.horizontal, 8)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.white.opacity(index == 0 ? 0.09 : 0.04)))
+                        }
+                        .buttonStyle(NotchPress(scale: 0.97))
+                        .probe("notification.\(index)")
+                    }
+                }
+                .animation(NotchMotion.swap, value: notifications.history.map(\.id))
                 .padding(.top, 2)
             }
         }

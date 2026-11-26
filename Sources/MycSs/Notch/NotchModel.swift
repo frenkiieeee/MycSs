@@ -127,6 +127,8 @@ final class NotchModel {
 
     /// A notification of another app, for a few seconds.
     private(set) var notification: NotchNotification?
+    /// How many arrived in a row from the app of `notification`.
+    private(set) var notificationCount = 0
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
 
     /// The widget showing on the right of the home page.
@@ -154,10 +156,11 @@ final class NotchModel {
     var hoverDisplay: CGDirectDisplayID = 0
     private(set) var openDisplay: CGDirectDisplayID = 0
 
-    /// How long the pointer has to rest on the notch before it opens, so that
-    /// crossing the top of the screen does not open it.
-    private let openDelay: UInt64 = 90_000_000
-    private let closeDelay: UInt64 = 180_000_000
+    /// How long the pointer has to rest on the notch before it opens (so crossing
+    /// the top of the screen does not open it), and how long it waits to close. The
+    /// user chooses both (spec 013).
+    private var openDelay: UInt64 { UInt64(AppSettings.shared.notchOpenDelay * 1_000_000_000) }
+    private var closeDelay: UInt64 { UInt64(AppSettings.shared.notchCloseDelay * 1_000_000_000) }
 
     // MARK: - Hover
 
@@ -168,7 +171,7 @@ final class NotchModel {
         if inside { hoverDisplay = display }
 
         if inside {
-            guard !isOpen else { return }
+            guard !isOpen, AppSettings.shared.notchOpenTrigger == .hover else { return }
             hoverTask = Task {
                 try? await Task.sleep(nanoseconds: openDelay)
                 guard !Task.isCancelled, isHovering, !isOpen else { return }
@@ -264,16 +267,25 @@ final class NotchModel {
 
     // MARK: - Notifications
 
-    /// Shows a notification, for a few seconds. Pointing at it keeps it.
-    func showNotification(_ notification: NotchNotification, for seconds: TimeInterval = 5.5) {
-        self.notification = notification
+    /// Shows a notification, for the time the user chose. Pointing at it keeps it.
+    /// Several in a row from the same app are counted ("WhatsApp · 3") instead of
+    /// replacing each other without a trace.
+    func showNotification(_ notification: NotchNotification, for seconds: TimeInterval? = nil) {
+        if let shown = self.notification, shown.bundleID == notification.bundleID, shown.id != notification.id {
+            notificationCount += 1
+        } else {
+            notificationCount = 1
+        }
+        withAnimation(NotchMotion.swap) { self.notification = notification }
         isPeeking = false
         peekTask?.cancel()
         notificationTask?.cancel()
+        let duration = seconds ?? AppSettings.shared.notchNotificationSeconds
         notificationTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self.notification = nil
+            self.notificationCount = 0
         }
         Log.line("notch: notification from \(notification.appName)")
     }
@@ -281,6 +293,7 @@ final class NotchModel {
     func dismissNotification() {
         notificationTask?.cancel()
         notification = nil
+        notificationCount = 0
     }
 
     /// Back to the idle state, when the notch leaves the screen.

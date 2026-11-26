@@ -65,7 +65,15 @@ extension NotchController {
                 .frame(width: g.panelSize.width, height: g.panelSize.height)
         }.frame(width: size.width, height: size.height))
         renderer.scale = 2
-        guard let image = renderer.nsImage,
+        // A widget the user has not turned on is drawn too: its setting is changed only
+        // for this one synchronous render (see `SettingsOverride`).
+        if case .widget(let widget) = shot, !AppSettings.shared.isNotchWidgetOn(widget) {
+            let list = (AppSettings.shared.notchWidgets + [widget]).map(\.rawValue).joined(separator: ",")
+            SettingsOverride.values = [SettingKey.notchWidgets: list]
+        }
+        let rendered = renderer.nsImage
+        SettingsOverride.values = nil
+        guard let image = rendered,
               let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:])
@@ -259,6 +267,11 @@ extension NotchController {
             await pause(0.7)
             await click("widget.clipboard", in: panel)
             await pause(0.8)
+            if NotchProbe.frames["clip.0"] == nil {
+                // The click can land while the notch is still opening: once more.
+                await click("widget.clipboard", in: panel)
+                await pause(0.8)
+            }
             check("clipboard widget lists what was copied", NotchProbe.frames["clip.0"] != nil)
             capture(panel, to: "\(prefix)-3g-clipboard.png")
             AppSettings.shared.notchWidgets = widgetsBefore

@@ -9,7 +9,7 @@ final class NotchSettingsNav {
     static let shared = NotchSettingsNav()
 
     enum Tab: String, CaseIterable, Identifiable {
-        case styles, look, music, indicators, widgets, system
+        case styles, look, music, indicators, widgets, notifications, system
 
         var id: String { rawValue }
         var title: String {
@@ -19,6 +19,7 @@ final class NotchSettingsNav {
             case .music: return "Música"
             case .indicators: return "Teclas"
             case .widgets: return "Widgets"
+            case .notifications: return "Avisos"
             case .system: return "Sistema"
             }
         }
@@ -55,6 +56,7 @@ struct NotchSettingsPage: View {
                     looks
                 case .look:
                     sizeAndMotion
+                    openAndClose
                     appearance
                 case .music:
                     music
@@ -63,7 +65,9 @@ struct NotchSettingsPage: View {
                     keyboardLight
                 case .widgets:
                     widgets
+                case .notifications:
                     notifications
+                    systemBanners
                 case .system:
                     menuBar
                 }
@@ -176,6 +180,45 @@ struct NotchSettingsPage: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// How fast it opens and closes, and what a drag of files does (spec 013).
+    private var openAndClose: some View {
+        Section("Apertura y cierre") {
+            Picker("Abrir", selection: $settings.notchOpenTrigger) {
+                ForEach(AppSettings.NotchOpenTrigger.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            if settings.notchOpenTrigger == .hover {
+                seconds("Esperar antes de abrir", value: $settings.notchOpenDelay, in: 0...1)
+            }
+            seconds("Esperar antes de cerrar", value: $settings.notchCloseDelay, in: 0...2)
+
+            Toggle("Abrir la bandeja al arrastrar archivos", isOn: $settings.notchDragOpen)
+            if settings.notchDragOpen {
+                seconds("Mantener los archivos encima", value: $settings.notchDragDelay, in: 0...1.5)
+                Picker("Zona de arrastre", selection: $settings.notchDragZone) {
+                    ForEach(AppSettings.NotchDragZone.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+            }
+            Text("""
+            Con «Con un clic» el notch solo se abre al pulsarlo. La bandeja se abre cuando \
+            arrastras archivos y los mantienes sobre el notch el tiempo elegido; un clic \
+            sostenido o un arrastre de otra cosa ya no la abren.
+            """)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func seconds(_ title: String, value: Binding<Double>, in range: ClosedRange<Double>, step: Double = 0.05) -> some View {
+        HStack {
+            Text(title)
+            Slider(value: value, in: range, step: step)
+            Text(String(format: "%.2f s", value.wrappedValue))
+                .monospacedDigit()
+                .frame(width: 56, alignment: .trailing)
         }
     }
 
@@ -322,52 +365,94 @@ struct NotchSettingsPage: View {
             Toggle("Mostrar las notificaciones de otras apps", isOn: $settings.notchNotifications)
 
             LabeledContent("Acceso total al disco") {
-                switch notificationAccess.access {
-                case .granted: Text("Concedido").foregroundStyle(Color.green)
-                case .denied: Text("Falta el permiso").foregroundStyle(Color.orange)
-                case .unavailable: Text("No se encuentra la base de datos").foregroundStyle(Color.orange)
-                case .unknown: Text("Comprobando…").foregroundStyle(.secondary)
-                }
-            }
-
-            if notificationAccess.access != .granted {
-                HStack {
-                    Button("Abrir Acceso total al disco…") { Self.openPrivacy("AllFiles") }
-                    Button("Mostrar MycSs en el Finder y copiar su ruta") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(Bundle.main.bundlePath, forType: .string)
-                        accessibility.revealApp()
+                HStack(spacing: 10) {
+                    switch notificationAccess.access {
+                    case .granted: Text("Concedido").foregroundStyle(Color.green)
+                    case .denied: Text("Falta el permiso").foregroundStyle(Color.orange)
+                    case .unavailable: Text("No se encuentra la base de datos").foregroundStyle(Color.orange)
+                    case .unknown: Text("Comprobando…").foregroundStyle(.secondary)
+                    }
+                    if notificationAccess.access != .granted {
+                        Button("Conceder…") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(Bundle.main.bundlePath, forType: .string)
+                            Self.openPrivacy("AllFiles")
+                            accessibility.revealApp()
+                        }
                     }
                 }
-                Text("""
-                **MycSs no sale en la lista hasta que la añades tú**, porque macOS solo \
-                enseña ahí las apps que ya ha visto pedir ese permiso. **1.** Pulsa «Abrir \
-                Acceso total al disco…». **2.** Pulsa el botón **+** debajo de la lista \
-                (te pedirá tu contraseña o Touch ID). **3.** Elige MycSs: si no la ves, \
-                pulsa «Mostrar MycSs en el Finder» y arrástrala a la lista, o usa ⇧⌘G en el \
-                selector y pega la ruta, que se copia al pulsar ese botón. **4.** Activa el interruptor de MycSs y, si \
-                macOS lo pide, «Cerrar y reabrir». El estado de arriba se actualiza solo.
-                """)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            }
+            if notificationAccess.access != .granted {
+                DisclosureGroup("Cómo conceder el permiso") {
+                    Text("""
+                    «Conceder…» abre Acceso total al disco y enseña MycSs en el Finder (su ruta \
+                    queda copiada). Pulsa **+** bajo la lista, elige MycSs (o arrástrala, o usa \
+                    ⇧⌘G y pega la ruta) y activa su interruptor. El estado de arriba cambia solo.
+                    """)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
             }
 
+            seconds("Tiempo en el notch", value: $settings.notchNotificationSeconds, in: 2...12, step: 0.5)
+            Toggle("Mostrar el contenido", isOn: $settings.notchNotificationShowBody)
+            Toggle("Historial en el notch abierto", isOn: Binding(
+                get: { settings.isNotchWidgetOn(.notifications) },
+                set: { settings.setNotchWidget(.notifications, on: $0) }
+            ))
             Text("""
-            macOS guarda las notificaciones en una base de datos protegida: MycSs la lee \
-            (solo la lee) y enseña la nueva en el notch unos segundos; apuntarla con el ratón \
-            la mantiene y un clic abre la app. **No puede ocultar el aviso del sistema**: \
-            macOS lo dibuja por su cuenta. Para verlo solo en el notch, en Ajustes del Sistema › \
-            Notificaciones pon el estilo de aviso en «Ninguno» en las apps que quieras; \
-            las notificaciones siguen llegando al Centro de notificaciones y MycSs las ve. \
-            Tras conceder el permiso, cierra y abre MycSs.
+            Salen en el notch en cuanto llegan; varias seguidas de la misma app se cuentan. \
+            Apuntar una con el ratón la mantiene y un clic abre la app. Sin el contenido, solo \
+            se ve qué app avisa. El historial vive en la memoria y se borra al salir.
             """)
             .font(.callout)
             .foregroundStyle(.secondary)
-            Button("Abrir Notificaciones…") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-                    NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Where each app's notifications are seen, and the system's banner (spec 012).
+    private var systemBanners: some View {
+        Section("Dónde se ven") {
+            Picker("Para las apps nuevas", selection: $settings.notchNotificationDefault) {
+                ForEach(AppSettings.NotificationRule.allCases) { Text($0.title).tag($0) }
+            }
+            let rules = notificationAccess.apps.map { settings.notificationRule(for: $0) } + [settings.notchNotificationDefault]
+            if rules.contains(where: \.hidesBanner), !accessibility.isTrusted {
+                LabeledContent("Accesibilidad") {
+                    HStack(spacing: 10) {
+                        Text("Falta para «Solo notch»").foregroundStyle(Color.orange)
+                        Button("Pedir permiso…") { accessibility.request() }
+                    }
                 }
             }
+            ForEach(notificationAccess.apps.prefix(14), id: \.self) { bundle in
+                Picker(selection: Binding(
+                    get: { settings.notificationRule(for: bundle) },
+                    set: { settings.setNotificationRule($0, for: bundle) }
+                )) {
+                    ForEach(AppSettings.NotificationRule.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if let icon = NotchNotification.icon(for: bundle) {
+                            Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+                        }
+                        Text(NotchNotification.appName(for: bundle))
+                    }
+                }
+            }
+            if notificationAccess.apps.isEmpty, notificationAccess.access == .granted {
+                Text("Las apps aparecerán aquí cuando manden notificaciones.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Text("""
+            **Solo notch** cierra el aviso lateral de macOS en cuanto la notificación sale en \
+            el notch, mientras MycSs está activo (experimental: también la quita del Centro de \
+            notificaciones). **Solo sistema** deja la app fuera del notch. Cambia una app y \
+            las demás siguen la regla de las apps nuevas.
+            """)
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 

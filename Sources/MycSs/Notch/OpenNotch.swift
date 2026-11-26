@@ -73,7 +73,7 @@ struct Header: View {
                 } label: {
                     HStack(spacing: 7) {
                         NotificationIcon(notification: notification, size: 18)
-                        Text(notification.headline)
+                        Text(notification.shownHeadline)
                             .font(.system(size: 11.5, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
@@ -175,7 +175,7 @@ struct MusicBlock: View {
                     .matchedGeometryEffect(id: "cover", in: space)
                     .shadow(color: NotchPalette.accent(model).opacity(0.4), radius: 16)
                     .overlay(alignment: .bottomTrailing) {
-                        PlayerBadge(source: model.track.source)
+                        PlayerBadge(model: model)
                             .offset(x: 6, y: 6)
                     }
                     // Steps back when paused, like the cover in the lyrics.
@@ -226,28 +226,59 @@ struct MusicBlock: View {
     }
 }
 
-/// The icon of the player the song comes from, on the corner of the cover.
+/// The icon of the player the song comes from, on the corner of the cover: the app,
+/// or the browser for a tab. With more than one player that has something, it is a
+/// button that moves to the next one (spec 014).
 struct PlayerBadge: View {
 
-    let source: NowPlaying.Source
+    @Bindable var model: LyricsViewModel
 
     private var icon: NSImage? {
         let bundle: String
-        switch source {
+        switch model.track.source {
         case .spotify: bundle = "com.spotify.client"
         case .appleMusic: bundle = "com.apple.Music"
+        case .browser: bundle = model.track.appBundleID
         case .none: return nil
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return nil }
+        guard !bundle.isEmpty,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return nil }
         return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    private var canSwitch: Bool {
+        model.availableSources.contains { $0 != model.track.source }
     }
 
     var body: some View {
         if let icon {
-            Image(nsImage: icon)
-                .resizable()
-                .frame(width: 26, height: 26)
-                .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+            Button {
+                guard canSwitch else { return }
+                NotchHaptics.tick()
+                model.cycleSource()
+            } label: {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 26, height: 26)
+                    .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+                    .overlay(alignment: .topTrailing) {
+                        if canSwitch {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 7.5, weight: .heavy))
+                                .foregroundStyle(.black)
+                                .frame(width: 13, height: 13)
+                                .background(Circle().fill(.white))
+                                .offset(x: 4, y: -4)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .contentTransition(.opacity)
+            }
+            .buttonStyle(NotchPress(scale: 0.85))
+            .help(canSwitch ? "Pasar al siguiente reproductor" : "")
+            .probe("playerBadge")
+            .animation(NotchMotion.swap, value: canSwitch)
+            .animation(NotchMotion.swap, value: model.track.source)
         }
     }
 }

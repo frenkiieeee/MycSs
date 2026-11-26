@@ -20,6 +20,6 @@ final class NotchServices {
         timer = TimerModel()
         system = SystemStatsModel()
         clipboard = ClipboardModel(demo: demo)
-        notifications = NotificationsModel()
+        notifications = NotificationsModel(demo: demo)
     }
 }
