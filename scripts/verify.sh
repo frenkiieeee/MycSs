@@ -9,7 +9,8 @@
 #    notification reader against a database of its own
 # 3. (with --notch) the notch's own click test
 # 4. every relative link in docs/, CLAUDE.md and the READMEs resolves
-# 5. VERSION is a semantic version, the shell scripts parse, and no long dash
+# 5. the changelog has notes if the code changed since the last tag
+# 6. VERSION is a semantic version, the shell scripts parse, and no long dash
 #    (the project writes without it) is left in the code or the docs
 #
 set -uo pipefail
@@ -74,6 +75,13 @@ while IFS= read -r file; do
 done < <(find docs -name '*.md'; echo CLAUDE.md; echo README.md; echo README.en.md; echo CONTRIBUTING.md; echo CHANGELOG.md)
 if [ -s /tmp/mycss-verify-broken ]; then fail=1; fi
 rm -f /tmp/mycss-verify-broken
+
+echo ">> changelog"
+python3 scripts/changelog.py latest >/dev/null || { echo "   CHANGELOG.md has no numbered version"; fail=1; }
+last=$(git describe --tags --abbrev=0 2>/dev/null || true)
+if [ -n "$last" ] && ! git diff --quiet "$last" -- Sources && ! python3 scripts/changelog.py check >/dev/null; then
+    echo "   the code changed since $last but [Unreleased] in CHANGELOG.md has no notes (warning)"
+fi
 
 echo ">> version, scripts and style"
 EM=$(printf '\xe2\x80\x94')   # the characters are built here so this file does not contain them
