@@ -1,31 +1,81 @@
 import AppKit
 import Observation
 
-/// The last things the user copied, for the notch.
+/// The last things the user copied, for the notch: text, and pictures (a screenshot
+/// copied with Ctrl, a picture copied from a page or from the Finder).
 ///
 /// **It is off until the user turns it on**, because it reads what is copied.
 /// Everything stays in memory: nothing is written to disk and nothing is sent
 /// anywhere, and it is gone when the app quits. What password managers mark as
-/// secret is never kept.
+/// secret is never kept. A picture is kept as a PNG up to `maxImageBytes`, and the
+/// whole list is cut to `capacity` entries, so it cannot grow without limit.
 @MainActor
 @Observable
 final class ClipboardModel {
 
     struct Entry: Identifiable, Equatable {
+
+        enum Content: Equatable {
+            case text(String)
+            /// PNG data, the size in pixels and a smaller picture for the list and the preview.
+            case image(png: Data, width: Int, height: Int, thumbnail: NSImage)
+        }
+
         let id = UUID()
-        let text: String
+        let content: Content
+
+        init(text: String) { content = .text(text) }
+        init(image png: Data, width: Int, height: Int, thumbnail: NSImage) {
+            content = .image(png: png, width: width, height: height, thumbnail: thumbnail)
+        }
+
+        var isImage: Bool {
+            if case .image = content { return true }
+            return false
+        }
+
+        var thumbnail: NSImage? {
+            if case .image(_, _, _, let thumbnail) = content { return thumbnail }
+            return nil
+        }
+
+        /// What the entry has in common with a copy of the same thing.
+        var key: String {
+            switch content {
+            case .text(let text): return "t:" + text
+            case .image(let png, _, _, _): return "i:\(png.count):\(png.hashValue)"
+            }
+        }
 
         /// One line, cut short, for the notch.
         var preview: String {
-            let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return trimmed.count > 60 ? String(trimmed.prefix(60)) + "…" : trimmed
+            switch content {
+            case .text(let text):
+                let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return trimmed.count > 60 ? String(trimmed.prefix(60)) + "…" : trimmed
+            case .image(_, let width, let height, _):
+                return "Imagen · \(width) × \(height)"
+            }
         }
     }
 
     private(set) var entries: [Entry] = []
+    /// The entry the pointer is on, so a picture can be shown big.
+    private(set) var hoveredID: Entry.ID?
+
+    /// The picture to preview: the one under the pointer.
+    var hoveredImage: Entry? {
+        entries.first { $0.id == hoveredID && $0.isImage }
+    }
+
+    func hover(_ entry: Entry, _ inside: Bool) {
+        if inside { hoveredID = entry.id } else if hoveredID == entry.id { hoveredID = nil }
+    }
 
     static let capacity = 6
+    /// A picture bigger than this is not kept (a full-screen capture is about 2 MB).
+    static let maxImageBytes = 12_000_000
     /// Pasteboard types the apps that keep secrets use to say "do not record".
     private static let secretTypes: Set<String> = [
         "org.nspasteboard.ConcealedType",
@@ -65,18 +115,36 @@ final class ClipboardModel {
 
     /// Forgets everything that was kept.
     func clear() {
+        hoveredID = nil
         entries.removeAll()
+    }
+
+    func remove(_ entry: Entry) {
+        if hoveredID == entry.id { hoveredID = nil }
+        entries.removeAll { $0.id == entry.id }
     }
 
     /// Puts an entry back on the pasteboard.
     func copy(_ entry: Entry) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(entry.text, forType: .string)
+        switch entry.content {
+        case .text(let text):
+            pasteboard.setString(text, forType: .string)
+        case .image(let png, _, _, _):
+            // The PNG, and a TIFF for the apps that only read that.
+            pasteboard.setData(png, forType: .png)
+            if let tiff = NSImage(data: png)?.tiffRepresentation { pasteboard.setData(tiff, forType: .tiff) }
+        }
         lastCount = pasteboard.changeCount
         // It moves to the front.
-        entries.removeAll { $0.text == entry.text }
-        entries.insert(Entry(text: entry.text), at: 0)
+        remember(entry)
+    }
+
+    func remember(_ entry: Entry) {
+        entries.removeAll { $0.key == entry.key }
+        entries.insert(entry, at: 0)
+        if entries.count > Self.capacity { entries.removeLast(entries.count - Self.capacity) }
     }
 
     private func check() {
@@ -87,13 +155,44 @@ final class ClipboardModel {
         // Never keep what a password manager says is secret.
         let types = Set((pasteboard.types ?? []).map(\.rawValue))
         guard types.isDisjoint(with: Self.secretTypes) else { return }
-        guard let text = pasteboard.string(forType: .string),
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              text.count < 5_000
-        else { return }
+        let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // A picture, unless what came with it is real text (and not just the address
+        // a browser adds to a copied image).
+        let isAddress = !text.contains(where: \.isNewline) && URL(string: text)?.scheme != nil
+        if text.isEmpty || isAddress, let entry = Self.imageEntry(from: pasteboard) {
+            remember(entry)
+            return
+        }
+        guard !text.isEmpty, text.count < 5_000, let raw = pasteboard.string(forType: .string) else { return }
+        remember(Entry(text: raw))
+    }
 
-        entries.removeAll { $0.text == text }
-        entries.insert(Entry(text: text), at: 0)
-        if entries.count > Self.capacity { entries.removeLast(entries.count - Self.capacity) }
+    // MARK: - Pictures
+
+    /// The picture on the pasteboard: its data, or a picture file copied in the Finder.
+    static func imageEntry(from pasteboard: NSPasteboard) -> Entry? {
+        var data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
+        if data == nil,
+           let url = (pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?.first,
+           (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.conforms(to: .image) == true,
+           ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? .max) < maxImageBytes {
+            data = try? Data(contentsOf: url)
+        }
+        guard let data, data.count < maxImageBytes * 2, let bitmap = NSBitmapImageRep(data: data),
+              let png = bitmap.representation(using: .png, properties: [:]), png.count < maxImageBytes,
+              let image = NSImage(data: png)
+        else { return nil }
+        return Entry(image: png, width: bitmap.pixelsWide, height: bitmap.pixelsHigh, thumbnail: thumbnail(of: image))
+    }
+
+    /// A smaller copy: drawn tiny in the list and big in the preview, so 320 is enough.
+    static func thumbnail(of image: NSImage, side: CGFloat = 320) -> NSImage {
+        let ratio = max(image.size.width, image.size.height, 1)
+        let size = NSSize(width: image.size.width / ratio * side, height: image.size.height / ratio * side)
+        let small = NSImage(size: size)
+        small.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1)
+        small.unlockFocus()
+        return small
     }
 }
