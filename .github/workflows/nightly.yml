@@ -1,0 +1,42 @@
+name: Nightly
+
+# Every push to main builds the app and replaces the "nightly" pre-release, so
+# `brew upgrade --cask --greedy-latest mycss@nightly` always has the newest main.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'Casks/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build the disk image
+        run: |
+          ./scripts/make-dmg.sh
+          V="$(tr -d '[:space:]' < VERSION)"
+          cp "dist/MycSs-${V}.dmg" dist/MycSs-nightly.dmg
+      - name: Replace the nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHORT="$(git rev-parse --short HEAD)"
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/MycSs-nightly.dmg \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "MycSs nightly" \
+            --notes "Automatic build of main at ${SHORT}. Not a numbered release: it can be unstable. Install with: brew install --cask frenkiieeee/mycss/mycss@nightly"

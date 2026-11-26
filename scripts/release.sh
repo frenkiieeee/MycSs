@@ -43,9 +43,12 @@ if [ -n "${NEW}" ]; then
 fi
 VERSION="$(tr -d '[:space:]' < VERSION)"
 
+# The notes under [Unreleased] become this version's section (the day is today's).
 if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
-    echo "ERROR: CHANGELOG.md has no '## [${VERSION}]' section. Write it first." >&2
-    exit 1
+    python3 scripts/changelog.py release "${VERSION}" || {
+        echo "ERROR: CHANGELOG.md has no '## [${VERSION}]' section and [Unreleased] has no notes to turn into it." >&2
+        exit 1
+    }
 fi
 
 echo ">> Checks"
@@ -56,10 +59,6 @@ echo ">> Disk image"
 
 SHA="$(cut -d' ' -f1 "dist/MycSs-${VERSION}.dmg.sha256")"
 
-echo ">> Homebrew cask"
-CASK="packaging/homebrew/mycss.rb"
-sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/; s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" "${CASK}"
-
 cat <<DONE
 
 == MycSs ${VERSION} is ready ==
@@ -67,10 +66,10 @@ cat <<DONE
    sha256 ${SHA}
 
 Next, by hand:
-   git add VERSION CHANGELOG.md packaging/homebrew/mycss.rb
+   git add VERSION CHANGELOG.md
    git commit -m "chore(release): ${VERSION}"
    git tag -a v${VERSION} -m "MycSs ${VERSION}"
    git push origin main --tags
-Then publish dist/MycSs-${VERSION}.dmg (and its .sha256) as a GitHub release for
-the tag, and copy ${CASK} to the tap (frenkiieeee/homebrew-mycss, Casks/mycss.rb).
+The tag makes GitHub build and publish the release, and point the Homebrew cask
+(Casks/mycss.rb) at it. Nothing else to copy.
 DONE
