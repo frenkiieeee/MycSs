@@ -4,51 +4,103 @@
 
 # MycSs
 
-**Una capa creativa para tu Mac.** Letras sincronizadas palabra a palabra sobre la pantalla de bloqueo, y un notch que reúne música, calendario y más.
+### Tu música, por fin a la altura de tu Mac.
+
+Letras sincronizadas **palabra a palabra** cuando bloqueas la pantalla, y un **notch vivo** que reúne tu música, tus avisos y tus herramientas del día a día.
 
 ![Versión](https://img.shields.io/badge/versi%C3%B3n-0.2.5-FFD400?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-15%2B-0B0B0F?style=flat-square)
-![Swift](https://img.shields.io/badge/Swift-5-F05138?style=flat-square)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-3A3A46?style=flat-square)
+![Gratis](https://img.shields.io/badge/precio-gratis-3A3A46?style=flat-square)
 
-[Instalación](#instalación) · [Funciones](#qué-hace) · [Permisos](#permisos) · [Solución de problemas](#solución-de-problemas) · [English](README.en.md)
+**[Instalar](#instalar-en-un-minuto)** · [Qué hace](#qué-hace) · [Preguntas frecuentes](#preguntas-frecuentes) · [English](README.en.md)
 
 </div>
 
 ---
 
+## Instalar en un minuto
+
+```bash
+brew tap frenkiieeee/mycss https://github.com/frenkiieeee/MycSs
+brew install --cask mycss
+```
+
+¿Prefieres un solo comando sin Homebrew? `curl -fsSL https://raw.githubusercontent.com/frenkiieeee/MycSs/main/install.sh | bash`. ¿O el instalador de siempre? Descarga el `.dmg` desde [Releases](https://github.com/frenkiieeee/MycSs/releases) y arrastra MycSs a Aplicaciones.
+
+> Con Homebrew, **siempre al día**: `brew upgrade --cask mycss` trae cada versión nueva. Si quieres lo último que se publica en la rama principal, instala `mycss@nightly` y actualízalo con `brew upgrade --cask --greedy-latest mycss@nightly`.
+
 ## Qué hace
 
-**Letras en la pantalla de bloqueo.** Al bloquear la Mac aparece la letra de la canción que suena en Spotify, Apple Music o una pestaña del navegador, resaltada **palabra a palabra** al ritmo de la voz, con la portada, un reloj y un fondo animado que toma los colores del álbum. También se abre como salvapantallas con un atajo (por defecto ⌃⌥L), desde el menú de la barra o tras un rato sin usar la Mac.
+### Pon una canción y bloquea la Mac
 
-**Un notch con música y widgets.** El notch muestra la portada y un visualizador mientras suena algo, el título al cambiar de canción, el volumen, el brillo y la luz del teclado (con un atajo propio, ⌥F2 y ⌥F1, que puedes cambiar), las notificaciones (al instante, y app por app en el notch, en el sistema o en los dos), y se abre con el puntero o con un clic hasta un panel con el reproductor y widgets: calendario, recordatorios, temporizador, batería y sistema, portapapeles y una estantería para archivos. También sale en otras pantallas.
+La letra aparece en grande, **iluminada palabra a palabra** al ritmo de la voz, con la portada, un reloj elegante y un fondo animado que toma los colores del álbum. Sin tocar nada: funciona con **Spotify**, **Apple Music** y hasta con lo que suena en una pestaña del **navegador** (Chrome, Safari, Arc, Brave, Edge, Vivaldi, **Firefox y Zen**). También se abre como salvapantallas con un atajo (⌃⌥L).
 
-**Tuyo hasta el último detalle.** Fuente y efecto de resaltado, reloj (que puede ocultarse solo), fondos, animaciones de entrada y de cambio de canción, tamaño y movimiento del notch, indicadores de volumen... Todo se guarda como **estilos** (de fábrica o propios) que se pueden ver en una vista previa antes de aplicarlos.
+### Un notch que hace mucho más que ocultar la cámara
 
-### Funciones
+- **Música a la vista**: portada y visualizador al lado del notch, y el título al cambiar de canción. Pulsa o apunta para abrirlo y controla la reproducción.
+- **Avisos sin ruido**: las notificaciones llegan al notch al instante. Decide app por app si salen en el notch, en el sistema o en los dos, y revisa las últimas en el panel «Avisos», incluso después de reiniciar.
+- **Volumen, brillo y luz del teclado** con indicadores propios, también en la pantalla de bloqueo.
+- **Herramientas**: calendario (crea eventos pulsando la fecha), recordatorios, temporizador que baja bajo el notch, batería y sistema, portapapeles con texto e imágenes, y una estantería para arrastrar archivos.
+- Funciona en **varias pantallas**, y en Macs sin notch dibuja una píldora arriba al centro.
 
-| Área | Qué incluye |
+### Tuyo, hasta el último detalle
+
+Fuente, efecto de resaltado, reloj, fondos, animaciones, tamaño y movimiento del notch, tiempos de apertura y de cierre... Guarda todo como un **estilo**, míralo en una vista previa en vivo antes de aplicarlo y vuelve atrás con «Deshacer» cuando quieras.
+
+### De un vistazo
+
+| | |
 |---|---|
-| Letras | Palabra a palabra (LRCLIB, NetEase y QQ Music), tema desde la portada, fondo animado, profundidad como Apple Music, cambio de canción animado con o sin letra |
-| Reproductores | Spotify, Apple Music y el navegador (Chrome, Safari, Brave, Edge, Arc, Vivaldi, **Firefox y Zen**; el icono de la pestaña es la portada), sin APIs privadas (AppleScript). Controles de reproducción y un clic para pasar de uno a otro |
-| Pantalla | Reloj configurable con ocultación automática, marca de agua `@frenkiieeee` discreta, Esc o clic fuera para salir |
-| Notch | Música, volumen, brillo y luz del teclado (barra, deslizador, anillo, segmentos), notificaciones con reglas por app e historial, estantería, varias pantallas, tiempos de apertura, cierre y arrastre a tu gusto |
-| Widgets | Calendario (crea eventos y recordatorios pulsando la fecha), recordatorios, temporizador, sistema, portapapeles, notificaciones |
-| Ajustes | Vistas previas en vivo, estilos propios, restaurar valores con «Deshacer», abrir al iniciar sesión, buscar actualizaciones |
+| **Letras** | Palabra a palabra, de varias fuentes, con tema de color sacado de la portada |
+| **Reproductores** | Spotify, Apple Music y navegador, con un clic para pasar de uno a otro |
+| **Notch** | Música, avisos, volumen, brillo, luz del teclado, widgets y estantería |
+| **Estilos** | Cuatro de fábrica y los que crees tú, con vista previa |
+| **Privacidad** | Todo en tu Mac, sin cuentas ni análisis de uso |
+| **Coste** | Gratis y de código abierto (MIT) |
+
+## Primeros pasos
+
+1. Abre MycSs: aparece su icono en la barra de menús.
+2. Pon música en Spotify, Apple Music o el navegador. macOS pedirá un permiso la primera vez.
+3. Bloquea la Mac (⌃⌘Q) o pulsa **⌃⌥L** para ver las letras sin bloquear.
+4. Abre **Preferencias** desde el menú de la barra y elige un estilo.
+
+## Preguntas frecuentes
+
+**¿Es gratis?** Sí, y de código abierto bajo licencia MIT.
+
+**¿Funciona en mi Mac?** Necesita macOS 15 (Sequoia) o superior. El notch completo luce en Macs con notch; en los demás verás una píldora arriba al centro.
+
+**¿Por qué macOS avisa al abrirla?** MycSs aún no está notarizada por Apple. Con Homebrew o `install.sh` no verás el aviso; con el `.dmg`, haz clic derecho > Abrir la primera vez.
+
+**¿Qué pasa con mi privacidad?** Todo ocurre en tu Mac. Solo sale la búsqueda de la letra (título, artista y duración) y, si hace falta, la de la portada. No hay cuentas, análisis de uso ni conexiones en segundo plano. [Más abajo](#privacidad) está el detalle.
+
+**¿Por qué no encuentra la letra de una canción?** Algunas no están en ninguna fuente. MycSs lo intenta en varias y, si no hay letra, centra la portada.
+
+**¿Puedo ver las notificaciones en el notch?** Sí, si concedes el permiso de Acceso total al disco (macOS no ofrece otra vía). Es opcional: sin él, el resto funciona igual.
+
+**¿Cómo la desinstalo?** `brew uninstall --cask --zap mycss`, o `./scripts/uninstall.sh`. No deja nada atrás.
 
 ## Requisitos
 
 - macOS 15 (Sequoia) o superior.
-- Spotify o Apple Music, con una sesión iniciada.
+- Spotify, Apple Music o un navegador con algo sonando.
 - Un Mac con notch para el notch completo. En los demás se dibuja una píldora arriba al centro.
 
-## Instalación
+## Todas las formas de instalar
 
-### Homebrew
+### Homebrew (recomendada: siempre al día)
 
 ```bash
-brew install --cask frenkiieeee/mycss/mycss
+brew tap frenkiieeee/mycss https://github.com/frenkiieeee/MycSs
+brew install --cask mycss
 ```
+
+Si tu Homebrew lo pide por ser un tap de terceros: `brew trust frenkiieeee/mycss`.
+
+- **Versiones numeradas**: `brew upgrade --cask mycss`. Cada versión que se publica apunta sola al cask, sin esperar a nadie.
+- **Rama principal (`main`)**: `brew install --cask mycss@nightly`. Se reconstruye con cada cambio y se actualiza con `brew upgrade --cask --greedy-latest mycss@nightly`. Es lo más nuevo, y puede fallar. No se pueden tener las dos a la vez.
 
 ### Un comando
 
@@ -77,16 +129,8 @@ open MycSs.app
 
 ### Actualizar y desinstalar
 
-- Actualizar: `brew upgrade --cask mycss`, o vuelve a ejecutar `install.sh`, o usa «Buscar actualizaciones» en Preferencias > Acerca de. **Tras actualizar, macOS puede pedir de nuevo** Accesibilidad y Acceso total al disco (la app no está notarizada y su firma cambia).
+- Actualizar: `brew upgrade --cask mycss` (o `--greedy-latest` con `mycss@nightly`), o vuelve a ejecutar `install.sh`, o usa «Buscar actualizaciones» en Preferencias > Acerca de. **Tras actualizar, macOS puede pedir de nuevo** Accesibilidad y Acceso total al disco (la app no está notarizada y su firma cambia).
 - Desinstalar: `brew uninstall --cask --zap mycss`, o `./scripts/uninstall.sh`. Quita la app, sus preferencias, la caché y los registros.
-
-## Primeros pasos
-
-1. Abre MycSs: aparece su icono en la barra de menús (y el notch, si tienes la música sonando).
-2. Pon una canción en Spotify o Apple Music. macOS pedirá permiso de **Automatización** la primera vez.
-3. Bloquea la Mac (⌃⌘Q) o pulsa **⌃⌥L** para ver las letras sin bloquear.
-4. Abre **Preferencias** desde el menú de la barra: estilos, letras, reloj, apariencia y notch, con vistas previas en vivo.
-5. Opcional: activa «Abrir MycSs al iniciar sesión» en General.
 
 ## Permisos
 

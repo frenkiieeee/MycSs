@@ -4,7 +4,9 @@
 
 # MycSs
 
-**A creative layer for your Mac.** Synced, word by word lyrics on the lock screen, and a notch that gathers music, calendar and more.
+### Your music, finally worthy of your Mac.
+
+Synced lyrics **word by word** on the lock screen, and a **living notch** that gathers your music, your notifications and your everyday tools.
 
 ![Version](https://img.shields.io/badge/version-0.2.5-FFD400?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-15%2B-0B0B0F?style=flat-square)
@@ -16,23 +18,30 @@
 
 ---
 
+## Install in a minute
+
+```bash
+brew tap frenkiieeee/mycss https://github.com/frenkiieeee/MycSs
+brew install --cask mycss
+```
+
+Always up to date: `brew upgrade --cask mycss` brings each new release. Want what is on `main`? Install `mycss@nightly` instead and follow it with `brew upgrade --cask --greedy-latest mycss@nightly`. (If your Homebrew asks you to trust a third party tap: `brew trust frenkiieeee/mycss`.)
+
 ## What it does
 
-- **Lyrics on the lock screen** for Spotify, Apple Music and browser tabs (Chrome, Safari, Arc, Firefox, Zen...), highlighted word by word, with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (shortcut ⌃⌥L, menu bar, or after idle time).
-- **A notch** with cover and visualiser, the title on song change, a volume, brightness and keyboard light indicator (the light has its own shortcut, Option+F2 and Option+F1, which you can change), notifications (instant, with a rule per app: notch, system or both), a file shelf and widgets (calendar, reminders, timer, system, clipboard). It can show on other screens too.
-- **Customisable**: fonts, highlight effect, clock, backgrounds, animations, notch size and motion. Everything is saved as **styles** you can preview before applying.
+- **Lyrics on the lock screen**, lit word by word, for Spotify, Apple Music and browser tabs (Chrome, Safari, Arc, Firefox, Zen...), with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (⌃⌥L).
+- **A notch that does much more than hide the camera**: music with cover and visualiser, instant notifications with a rule per app (notch, system or both) and a history that survives a restart, volume, brightness and keyboard light indicators, and widgets: calendar, reminders, a timer that drops under the notch, system, a clipboard with text and pictures, and a file shelf. It works on several screens.
+- **Yours to the last detail**: fonts, highlight effect, clock, backgrounds, animations, notch size and timing. Save it all as a **style**, preview it live and undo whenever you want.
+- **Private and free**: everything runs on your Mac, no accounts, no analytics, MIT licence.
 
 ## Requirements
 
 macOS 15 or later, and Spotify or Apple Music. The full notch needs a Mac with a notch; other Macs get a pill at the top centre.
 
-## Install
+## Other ways to install
 
 ```bash
-# Homebrew
-brew install --cask frenkiieeee/mycss/mycss
-
-# or one command
+# one command, without Homebrew
 curl -fsSL https://raw.githubusercontent.com/frenkiieeee/MycSs/main/install.sh | bash
 ```
 
