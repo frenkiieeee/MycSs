@@ -37,6 +37,9 @@ struct NotchGeometry {
     /// A notification: a little wider than the wings, and a row of text.
     static var notificationWing: CGFloat { 50 * closedScale }
     static var notificationRow: CGFloat { 44 * closedText }
+    /// The timer: it drops under the cut-out, like a notification, so the time never
+    /// has to fit in the narrow side of the notch.
+    static var timerRow: CGFloat { 30 * closedText }
     /// The space at the outer edge of each side.
     static var sidePadding: CGFloat { 14 * closedScale }
     /// Room around the shape for its shadow.
@@ -55,7 +58,7 @@ struct NotchGeometry {
 
 /// What the notch is showing.
 enum NotchKind: Equatable {
-    case idle, wings, peek, hud, notification, open
+    case idle, wings, peek, hud, notification, timer, open
 }
 
 /// What the notch looks like right now: its size and its corners.
@@ -74,7 +77,7 @@ struct NotchLayout: Equatable {
         let cut = geometry.notch
         let settings = AppSettings.shared
         let music = hasTrack && notch.isListening
-        let wings = (settings.notchWings && music) || timerActive
+        let wings = settings.notchWings && music
         // On another screen it opens only where the pointer was; the others stay closed.
         let openHere = notch.isOpen && (display == 0 || notch.openDisplay == 0 || notch.openDisplay == display)
 
@@ -112,6 +115,14 @@ struct NotchLayout: Equatable {
                 bottomRadius = 18
             }
             ear = 6
+        } else if timerActive {
+            kind = .timer
+            body = CGSize(
+                width: cut.width + NotchGeometry.wing * 2 + NotchGeometry.peekExtraWidth * 0.5,
+                height: cut.height + NotchGeometry.timerRow
+            )
+            ear = 6
+            bottomRadius = 18
         } else if wings {
             kind = .wings
             body = CGSize(width: cut.width + NotchGeometry.wing * 2, height: cut.height)
@@ -124,5 +135,7 @@ struct NotchLayout: Equatable {
             ear = 0
             bottomRadius = 10
         }
+        // The user's roundness (spec 016); the idle notch keeps the hardware one.
+        if kind != .idle { bottomRadius *= CGFloat(settings.notchCorner) }
     }
 }

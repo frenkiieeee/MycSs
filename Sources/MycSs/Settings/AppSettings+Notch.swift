@@ -286,14 +286,72 @@ extension AppSettings {
     /// Where the notch's accent colour comes from.
     enum NotchAccent: String, CaseIterable {
         case album, yellow, white
+        case amber, sky, rose
 
         var title: String {
             switch self {
             case .album: return "Color del álbum"
             case .yellow: return "Amarillo MycSs"
             case .white: return "Blanco"
+            case .amber: return "Ámbar"
+            case .sky: return "Cielo"
+            case .rose: return "Rosa"
             }
         }
+    }
+
+    // MARK: - Notch: surface (spec 016)
+
+    /// What the notch is made of.
+    enum NotchSurface: String, CaseIterable {
+        /// Plain black, like the hardware notch.
+        case solid
+        /// See-through glass that blurs what is behind it.
+        case glass
+        /// Glass with the accent colour poured into it.
+        case tinted
+
+        var title: String {
+            switch self {
+            case .solid: return "Sólida"
+            case .glass: return "Cristal"
+            case .tinted: return "Cristal teñido"
+            }
+        }
+    }
+
+    var notchSurface: NotchSurface {
+        get { NotchSurface(rawValue: defaults.string(forKey: SettingKey.notchSurface) ?? "") ?? .solid }
+        set { defaults.set(newValue.rawValue, forKey: SettingKey.notchSurface) }
+    }
+
+    /// How much the glass lets through, 0.15 (nearly black) to 0.95.
+    var notchGlass: Double {
+        get { Self.clamp(defaults.object(forKey: SettingKey.notchGlass) as? Double ?? 0.55, 0.15, 0.95) }
+        set { defaults.set(Self.clamp(newValue, 0.15, 0.95), forKey: SettingKey.notchGlass) }
+    }
+
+    /// Multiplies the roundness of the notch's bottom corners.
+    var notchCorner: Double {
+        get { Self.clamp(defaults.object(forKey: SettingKey.notchCorner) as? Double ?? 1, 0.7, 1.5) }
+        set { defaults.set(Self.clamp(newValue, 0.7, 1.5), forKey: SettingKey.notchCorner) }
+    }
+
+    /// How the timer widget asks for the time.
+    enum NotchTimerStyle: String, CaseIterable {
+        case presets, ruler
+
+        var title: String {
+            switch self {
+            case .presets: return "Cuatro botones"
+            case .ruler: return "Regla que se arrastra"
+            }
+        }
+    }
+
+    var notchTimerStyle: NotchTimerStyle {
+        get { NotchTimerStyle(rawValue: defaults.string(forKey: SettingKey.notchTimerStyle) ?? "") ?? .presets }
+        set { defaults.set(newValue.rawValue, forKey: SettingKey.notchTimerStyle) }
     }
 
     var notchAccent: NotchAccent {

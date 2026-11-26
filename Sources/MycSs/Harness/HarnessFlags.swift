@@ -13,6 +13,11 @@ extension AppDelegate {
            let preset = StylePreset(rawValue: String(option.dropFirst(8))) {
             preset.apply(to: AppSettings.shared)
         }
+        // `--notch-look=sober|showy|quick|glass|island` does the same for the notch.
+        if let option = CommandLine.arguments.first(where: { $0.hasPrefix("--notch-look=") }),
+           let look = NotchLook(rawValue: String(option.dropFirst(13))) {
+            look.apply(to: AppSettings.shared)
+        }
         if CommandLine.arguments.contains("--cover-right") {
             AppSettings.shared.coverOnRight = true
         }

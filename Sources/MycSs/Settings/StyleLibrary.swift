@@ -28,7 +28,8 @@ enum StyleDomain: String {
                 SettingKey.notchPeekStyle, SettingKey.notchPeekWidth, SettingKey.notchPeekSeconds, SettingKey.notchPeekDuration, SettingKey.notchVisualizerStyle, SettingKey.notchHUDStyle,
                 SettingKey.notchHUDNumber, SettingKey.notchHUDMotion, SettingKey.notchHUDEntrance,
                 SettingKey.notchAccent, SettingKey.notchCoverShape, SettingKey.notchWings, SettingKey.notchPeek,
-                SettingKey.notchWidgets,
+                SettingKey.notchWidgets, SettingKey.notchSurface, SettingKey.notchGlass, SettingKey.notchCorner,
+                SettingKey.notchTimerStyle,
             ]
         }
     }

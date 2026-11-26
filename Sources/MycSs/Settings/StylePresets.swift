@@ -77,7 +77,7 @@ enum StylePreset: String, CaseIterable, Identifiable {
 
 /// Ready-made looks for the notch: motion, indicators and colour at once.
 enum NotchLook: String, CaseIterable, Identifiable {
-    case sober, showy, quick
+    case sober, showy, quick, glass, island
 
     var id: String { rawValue }
 
@@ -86,6 +86,8 @@ enum NotchLook: String, CaseIterable, Identifiable {
         case .sober: return "Sobrio"
         case .showy: return "Vistoso"
         case .quick: return "Rápido"
+        case .glass: return "Cristal"
+        case .island: return "Isla"
         }
     }
 
@@ -94,6 +96,8 @@ enum NotchLook: String, CaseIterable, Identifiable {
         case .sober: return "Se abre de golpe, cubierta cuadrada, barras blancas y solo el número al cambiar el volumen."
         case .showy: return "Elástica, a los lados primero, disco que gira, onda del color del álbum y anillo de volumen."
         case .quick: return "Respuesta inmediata, puntos amarillos y deslizador de volumen."
+        case .glass: return "Cristal que deja ver lo de detrás, borde de luz, acento blanco y rebote suave."
+        case .island: return "Cristal teñido de ámbar, esquinas grandes, anillo de volumen y temporizador de regla."
         }
     }
 
@@ -110,6 +114,7 @@ enum NotchLook: String, CaseIterable, Identifiable {
             s.notchHUDEntrance = .fade
             s.notchAccent = .white
             s.notchCoverShape = .rounded
+            Self.surface(s, .solid)
         case .showy:
             s.notchMotion = .bouncy
             s.notchOpenStyle = .sidesFirst
@@ -121,6 +126,7 @@ enum NotchLook: String, CaseIterable, Identifiable {
             s.notchHUDEntrance = .pop
             s.notchAccent = .album
             s.notchCoverShape = .vinyl
+            Self.surface(s, .solid)
         case .quick:
             s.notchMotion = .snappy
             s.notchOpenStyle = .together
@@ -132,6 +138,43 @@ enum NotchLook: String, CaseIterable, Identifiable {
             s.notchHUDEntrance = .slide
             s.notchAccent = .yellow
             s.notchCoverShape = .rounded
+            Self.surface(s, .solid)
+        case .glass:
+            s.notchMotion = .bouncy
+            s.notchOpenStyle = .together
+            s.notchPeekStyle = .drop
+            s.notchVisualizerStyle = .wave
+            s.notchHUDStyle = .slider
+            s.notchHUDNumber = .wheel
+            s.notchHUDMotion = .glide
+            s.notchHUDEntrance = .fade
+            s.notchAccent = .white
+            s.notchCoverShape = .rounded
+            Self.surface(s, .glass, glass: 0.6, corner: 1.15)
+        case .island:
+            s.notchMotion = .bouncy
+            s.notchOpenStyle = .together
+            s.notchPeekStyle = .drop
+            s.notchVisualizerStyle = .wave
+            s.notchHUDStyle = .ring
+            s.notchHUDNumber = .counting
+            s.notchHUDMotion = .elastic
+            s.notchHUDEntrance = .pop
+            s.notchAccent = .amber
+            s.notchCoverShape = .rounded
+            Self.surface(s, .tinted, glass: 0.5, corner: 1.3, timer: .ruler)
         }
+    }
+
+    /// The surface part of a look (spec 016). Every look sets it, so going from one
+    /// to another leaves nothing behind.
+    private static func surface(
+        _ s: AppSettings, _ surface: AppSettings.NotchSurface, glass: Double = 0.55,
+        corner: Double = 1, timer: AppSettings.NotchTimerStyle = .presets
+    ) {
+        s.notchSurface = surface
+        s.notchGlass = glass
+        s.notchCorner = corner
+        s.notchTimerStyle = timer
     }
 }

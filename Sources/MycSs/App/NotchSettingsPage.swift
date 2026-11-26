@@ -148,6 +148,33 @@ struct NotchSettingsPage: View {
 
     private var appearance: some View {
         Section("Aspecto") {
+            Picker("Superficie", selection: $settings.notchSurface) {
+                ForEach(AppSettings.NotchSurface.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            if settings.notchSurface != .solid {
+                HStack {
+                    Text("Transparencia")
+                    Slider(value: $settings.notchGlass, in: 0.15...0.95)
+                    Text("\(Int(settings.notchGlass * 100)) %")
+                        .monospacedDigit()
+                        .frame(width: 50, alignment: .trailing)
+                }
+                if settings.notchSurface == .tinted {
+                    Text("El cristal teñido toma el color de acento de abajo.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Text("Esquinas")
+                Slider(value: $settings.notchCorner, in: 0.7...1.5)
+                Text("\(Int(settings.notchCorner * 100)) %")
+                    .monospacedDigit()
+                    .frame(width: 50, alignment: .trailing)
+            }
+            Picker("Temporizador", selection: $settings.notchTimerStyle) {
+                ForEach(AppSettings.NotchTimerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
             Picker("Color de acento", selection: $settings.notchAccent) {
                 ForEach(AppSettings.NotchAccent.allCases, id: \.self) { Text($0.title).tag($0) }
             }
@@ -157,6 +184,9 @@ struct NotchSettingsPage: View {
             Picker("Visualizador", selection: $settings.notchVisualizerStyle) {
                 ForEach(AppSettings.NotchVisualizerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            Text("El notch en reposo es siempre negro para fundirse con el recorte de la pantalla; el cristal aparece cuando crece. Guarda tu combinación como estilo en la pestaña «Estilos».")
+                .font(.callout)
+                .foregroundStyle(.secondary)
             Toggle("Que siga el ritmo real de la canción", isOn: $settings.notchReactive)
             Text("""
             El ritmo real escucha el audio del sistema solo mientras suena música, lo reduce a \
@@ -400,10 +430,12 @@ struct NotchSettingsPage: View {
                 get: { settings.isNotchWidgetOn(.notifications) },
                 set: { settings.setNotchWidget(.notifications, on: $0) }
             ))
+            Toggle("Recordar el historial al reiniciar", isOn: $settings.notchNotificationKeepHistory)
             Text("""
             Salen en el notch en cuanto llegan; varias seguidas de la misma app se cuentan. \
-            Apuntar una con el ratón la mantiene y un clic abre la app. Sin el contenido, solo \
-            se ve qué app avisa. El historial vive en la memoria y se borra al salir.
+            Apuntar una con el ratón la mantiene y un clic abre la app y la quita del historial. \
+            Sin el contenido, solo se ve qué app avisa. El historial guarda \
+            las últimas 50 en un archivo tuyo (solo lo lee tu usuario); apagar el interruptor lo borra.
             """)
             .font(.callout)
             .foregroundStyle(.secondary)

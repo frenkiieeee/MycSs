@@ -396,7 +396,7 @@ struct NotchStage: View {
             // A stand-in for the desktop, under the menu bar.
             LinearGradient(colors: [Color(white: 0.34), Color(white: 0.18)], startPoint: .top, endPoint: .bottom)
             Rectangle().fill(.black.opacity(0.35)).frame(height: 24 * scale).frame(maxHeight: .infinity, alignment: .top)
-            NotchView(notch: state.notch, model: state.model, services: state.services, geometry: g, revision: revision)
+            NotchView(notch: state.notch, model: state.model, services: state.services, geometry: g, revision: revision, isPreview: true)
                 .environment(\.isSettingsPreview, true)
                 .frame(width: g.panelSize.width, height: g.panelSize.height, alignment: .top)
                 .scaleEffect(scale, anchor: .top)

@@ -22,6 +22,10 @@ final class TimerModel {
     private(set) var total: TimeInterval = 25 * 60
     private(set) var remaining: TimeInterval = 25 * 60
 
+    /// The time the ruler is on, in minutes (spec 016).
+    var rulerMinutes = 25
+    @ObservationIgnored var rulerDragStart: Int?
+
     /// Called once when the countdown reaches zero.
     @ObservationIgnored var onFinish: (() -> Void)?
 

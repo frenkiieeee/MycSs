@@ -11,6 +11,9 @@ enum NotchPalette {
         case .album: return model.theme.accent.color
         case .yellow: return brandYellow
         case .white: return .white
+        case .amber: return Color(red: 1.0, green: 0.70, blue: 0.30)
+        case .sky: return Color(red: 0.42, green: 0.74, blue: 1.0)
+        case .rose: return Color(red: 1.0, green: 0.50, blue: 0.62)
         }
     }
 }
@@ -30,6 +33,8 @@ struct NotchView: View {
     var display: CGDirectDisplayID = 0
     /// Goes up when a setting changes, so a settings preview is drawn again at once.
     var revision = 0
+    /// Drawn inside the settings window, where there is nothing of its own to blur.
+    var isPreview = false
 
     /// For the cover and the tab pill, which move between two places.
     @Namespace private var space
@@ -81,7 +86,14 @@ struct NotchView: View {
         .animation(heightAnimation, value: layout.body.height)
         .padding(.horizontal, layout.ear)
         .animation(widthAnimation, value: layout.ear)
-        .background(Color.black)
+        .background(
+            NotchSurfaceView(
+                surface: settings.notchSurface, strength: settings.notchGlass,
+                tint: NotchPalette.accent(model), isIdle: layout.kind == .idle,
+                shape: NotchShape(topRadius: layout.ear, bottomRadius: layout.bottomRadius),
+                drawsBlur: !isPreview
+            )
+        )
         .clipShape(NotchShape(topRadius: layout.ear, bottomRadius: layout.bottomRadius))
         .animation(widthAnimation, value: layout.bottomRadius)
         .shadow(color: .black.opacity(layout.isOpen ? 0.45 : 0), radius: 14, y: 6)
