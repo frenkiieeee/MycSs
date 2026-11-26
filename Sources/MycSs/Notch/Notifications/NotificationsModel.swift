@@ -70,6 +70,23 @@ final class NotificationsModel {
     /// Notifications older than this are history, not news.
     private let freshness: TimeInterval = 90
     private let historyLimit = 30
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    /// Writes the history shortly after the last change (several can come in a row).
+    private func scheduleSave() {
+        // A test database or a throwaway model never touches the real history file.
+        guard logsChanges, overridePath == nil else { return }
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled, let self else { return }
+            if AppSettings.shared.notchNotificationKeepHistory {
+                NotificationHistoryStore.save(self.history)
+            } else {
+                NotificationHistoryStore.erase()
+            }
+        }
+    }
 
     // MARK: - Lifecycle
 
@@ -77,6 +94,9 @@ final class NotificationsModel {
 
     func start() {
         guard timer == nil else { return }
+        if history.isEmpty, overridePath == nil, AppSettings.shared.notchNotificationKeepHistory {
+            history = NotificationHistoryStore.load()
+        }
         let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
@@ -104,10 +124,18 @@ final class NotificationsModel {
 
     func clearHistory() {
         history.removeAll()
+        scheduleSave()
     }
 
-    /// Opens the app a notification came from, and dismisses it.
+    func remove(_ notification: NotchNotification) {
+        history.removeAll { $0.id == notification.id }
+        scheduleSave()
+    }
+
+    /// Opens the app a notification came from. Once opened it is dealt with, so it
+    /// leaves the history as well as the notch.
     func open(_ notification: NotchNotification) {
+        remove(notification)
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: notification.bundleID) {
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
@@ -172,7 +200,9 @@ final class NotificationsModel {
             guard item.bundleID != Bundle.main.bundleIdentifier, !item.headline.isEmpty else { continue }
             let rule = settings.notificationRule(for: item.bundleID)
             guard rule.shownInNotch else { continue }
+            history.removeAll { $0.id == item.id }
             history.insert(item, at: 0)
+            scheduleSave()
             if history.count > historyLimit { history.removeLast(history.count - historyLimit) }
             current = item
             onNotification?(item)

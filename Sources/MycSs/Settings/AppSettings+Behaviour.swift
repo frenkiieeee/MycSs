@@ -137,12 +137,18 @@ extension AppSettings {
     }
 
     /// Whether the text of a notification is shown, or only that one arrived.
+    /// Whether the last notifications are kept between runs.
+    var notchNotificationKeepHistory: Bool {
+        get { defaults.object(forKey: SettingKey.notchNotificationKeepHistory) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: SettingKey.notchNotificationKeepHistory) }
+    }
+
     var notchNotificationShowBody: Bool {
         get { defaults.object(forKey: SettingKey.notchNotificationShowBody) as? Bool ?? true }
         set { defaults.set(newValue, forKey: SettingKey.notchNotificationShowBody) }
     }
 
-    private static func clamp(_ value: Double, _ low: Double, _ high: Double) -> Double {
+    static func clamp(_ value: Double, _ low: Double, _ high: Double) -> Double {
         value.isFinite ? min(max(value, low), high) : low
     }
 }

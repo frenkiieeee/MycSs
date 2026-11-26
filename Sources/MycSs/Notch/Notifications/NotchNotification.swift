@@ -1,7 +1,7 @@
 import AppKit
 
 /// One notification of another app, ready to draw.
-struct NotchNotification: Identifiable, Equatable {
+struct NotchNotification: Identifiable, Equatable, Codable {
     let id: Int64
     let bundleID: String
     let title: String
@@ -37,14 +37,33 @@ struct NotchNotification: Identifiable, Equatable {
 
     // MARK: - Apps
 
+    /// Apps are asked once: the widget and the notch draw many times a second.
+    private static let cacheLock = NSLock()
+    private static var names: [String: String] = [:]
+    private static var icons: [String: NSImage?] = [:]
+
     static func appName(for bundleID: String, isOwn: Bool = false) -> String {
         if isOwn { return "MycSs" }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return bundleID }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let known = names[bundleID] { return known }
+        let name: String
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        } else {
+            name = bundleID
+        }
+        names[bundleID] = name
+        return name
     }
 
     static func icon(for bundleID: String) -> NSImage? {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let known = icons[bundleID] { return known }
+        var icon: NSImage?
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            icon = NSWorkspace.shared.icon(forFile: url.path)
+        }
+        icons[bundleID] = icon
+        return icon
     }
 }
