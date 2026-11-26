@@ -7,7 +7,7 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | [brand/](brand/frenkiieeee.md) | Marca Frenkiieeee: paleta, tipografía, mascota, tono |
 | [architecture/](architecture/overview.md) | Cómo está montada la app y [cómo fluyen los datos](architecture/data-flow.md) |
 | [specs/](specs/_template.md) | Un spec por funcionalidad, antes de construirla |
-| [decisions/](decisions/001-applescript-no-mediaremote.md) | Decisiones difíciles de revertir, en formato corto (la [006](decisions/006-versionado-y-distribucion.md) trata de versiones y distribución) |
+| [decisions/](decisions/001-applescript-no-mediaremote.md) | Decisiones difíciles de revertir, en formato corto (la [006](decisions/006-versionado-y-distribucion.md) trata de versiones y distribución, la [009](decisions/009-tap-en-el-repositorio.md) del tap de Homebrew) |
 | [architecture/internals.md](architecture/internals.md) | Notas técnicas por dentro: lectura de la música, retardo, notch, permisos, trampas |
 | [RELEASING.md](RELEASING.md) | Cómo se publica una versión |
 
@@ -29,6 +29,8 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 4d | Notificaciones al instante, por app y sin el aviso doble | [012](specs/012-notifications-v2.md) |
 | 4e | Apertura, cierre y arrastre del notch a medida | [013](specs/013-notch-timing-and-drag.md) |
 | 1d | El navegador como reproductor | [014](specs/014-browser-player.md) |
+| 1e | Pulido del notch, historial de avisos, portapapeles con imágenes y tap de Homebrew | [015](specs/015-notch-polish-and-tap.md) |
+| 1f | Superficies del notch: cristal, teñido y temporizador de regla | [016](specs/016-notch-surfaces.md) |
 | 6 | Notarización con Developer ID | pendiente |
 
 ## Cómo usarlos con agentes

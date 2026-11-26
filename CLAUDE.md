@@ -35,8 +35,8 @@ Ejecuta el binario del `.app` (no `.build/debug/MycSs`) cuando pruebes Spotify o
 
 ## Versiones y distribución
 
-- Versión semántica, fuente única: el archivo `VERSION`. `build-app.sh` la escribe en el `Info.plist`; el build es el número de commits. No la escribas a mano en otro sitio. Reglas en `docs/decisions/006-versionado-y-distribucion.md`, pasos en `docs/RELEASING.md`, historial en `CHANGELOG.md` (en inglés, se actualiza con cada cambio visible bajo `[Unreleased]`).
-- Se instala con DMG, `install.sh` o el cask de `packaging/homebrew/`. Sin notarizar: la firma cambia en cada release y macOS pierde Accesibilidad y Acceso total al disco.
+- Versión semántica, fuente única: el archivo `VERSION`. `build-app.sh` la escribe en el `Info.plist`; el build es el número de commits. No la escribas a mano en otro sitio. Reglas en `docs/decisions/006-versionado-y-distribucion.md`, pasos en `docs/RELEASING.md`, historial en `CHANGELOG.md` (en inglés, se actualiza con cada cambio visible bajo `[Unreleased]`; `scripts/changelog.py` lo convierte en versión al publicar).
+- Se instala con DMG, `install.sh` o Homebrew (el tap es este mismo repositorio: `Casks/mycss.rb` y `Casks/mycss@nightly.rb`, ADR 009; `release.yml` y `nightly.yml` los mantienen). Sin notarizar: la firma cambia en cada release y macOS pierde Accesibilidad y Acceso total al disco.
 - El código de pruebas y capturas vive en `Sources/MycSs/Harness/`, no en los archivos de producción. Los flags `--demo*` se leen solo en `Support/DemoFlags.swift`.
 - Las claves de ajustes se escriben solo en `Settings/SettingKey.swift`; `StyleDomain.keys` las usa, así que no hay cadenas sueltas.
 
@@ -50,6 +50,7 @@ Ejecuta el binario del `.app` (no `.build/debug/MycSs`) cuando pruebes Spotify o
 - `--lyrics-bench` mide cuántas canciones consiguen letra (`--hard`, `--providers`, `--parallel=1 --pause=12`, `--limit=N`). Úsalo antes y después de tocar `Lyrics/`.
 - `--notch-snapshot /tmp/n --demo` dibuja el notch cerrado, en vistazo y abierto (`/tmp/n-closed.png`, `-peek.png`, `-open.png`, `-shelf.png`, `-hud-volume.png`, `-hud-brightness.png`). La portada de la demo es un cuadrado de colores; con `--demo-mascot` es la mascota.
 - `--settings-snapshot /tmp/sp --demo` dibuja las vistas previas de los ajustes (overlay con cada estilo y notch en cada momento) y comprueba que «Deshacer» deja los ajustes como estaban. Las ventanas reales no se pueden capturar con la Mac bloqueada.
+- `--notch-look=sober|showy|quick|glass|island` aplica un estilo del notch dentro de ese proceso (el binario de `.build` usa otros ajustes que la app): sirve con `--notch-snapshot` o `--notch-selftest`. El cristal (`NotchSurface`, `NSVisualEffectView` detrás de la ventana) no sale en `--snapshot` ni en las capturas del notch; se ve en pantalla real con `screencapture`.
 - `--cover-bench` mide cuántas portadas se encuentran; `--notification-selftest` prueba el lector de notificaciones con una base sintética (llegada al instante, reglas por app, historial).
 - **Recompilar con la app abierta le quita los permisos** (Acceso total al disco, Accesibilidad) hasta que se reinicia: macOS compara el proceso con el binario en disco. Tras `./build-app.sh`, cierra y abre MycSs antes de concluir que falta un permiso.
 - Un binario lanzado desde la terminal tiene los permisos **de la terminal**, no los de MycSs. Para probar con los de la app: `open -n -a "$PWD/MycSs.app" --stdout /tmp/p.txt --args --banner-probe`.

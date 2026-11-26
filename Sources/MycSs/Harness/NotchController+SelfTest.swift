@@ -47,8 +47,10 @@ extension NotchController {
         if case .timerClosed = shot { services.timer.start(minutes: 5) }
         defer { if case .timerClosed = shot { services.timer.reset() } }
         // A timer for the timer widget, so its running look can be judged.
-        if case .widget(.timer) = shot { services.timer.start(minutes: 25) }
-        defer { if case .widget(.timer) = shot { services.timer.reset() } }
+        // (The ruler is the picker, not a running timer: it is drawn as it is.)
+        let runs = AppSettings.shared.notchTimerStyle != .ruler
+        if case .widget(.timer) = shot, runs { services.timer.start(minutes: 25) }
+        defer { if case .widget(.timer) = shot, runs { services.timer.reset() } }
         agenda.prepare()
         NotchSnapshot.isActive = true
         defer { NotchSnapshot.isActive = false }
@@ -235,14 +237,26 @@ extension NotchController {
             await pause(0.35)
             check("timer widget", notch.widget == .timer)
             capture(panel, to: "\(prefix)-3d-timer-presets.png")
+            // The ruler as the picker (spec 016), the way the island asks for the time.
+            let styleBefore = AppSettings.shared.notchTimerStyle
+            // (Frames stay recorded after a control goes: clear them to see what is drawn now.)
+            NotchProbe.frames["timer.preset.5"] = nil
+            AppSettings.shared.notchTimerStyle = .ruler
+            await pause(0.6)
+            check("the ruler shows when the style asks for it", NotchProbe.frames["timer.ruler"] != nil)
+            capture(panel, to: "\(prefix)-3d-timer-ruler.png")
+            NotchProbe.frames["timer.ruler"] = nil
+            AppSettings.shared.notchTimerStyle = styleBefore
+            await pause(0.9)
+            check("the four buttons are back", NotchProbe.frames["timer.preset.5"] != nil)
             await click("timer.preset.5", in: panel)
             await pause(0.4)
             check("a preset starts the timer", services.timer.state == .running)
             // Measured on a closed notch: the open one has the same size either way.
             let closedNotch = NotchModel()
-            check("a running timer widens the closed notch",
-                  NotchLayout(notch: closedNotch, geometry: geometry, hasTrack: false, timerActive: true).body.width
-                    > NotchLayout(notch: closedNotch, geometry: geometry, hasTrack: false, timerActive: false).body.width)
+            check("a running timer drops a row under the closed notch",
+                  NotchLayout(notch: closedNotch, geometry: geometry, hasTrack: false, timerActive: true).body.height
+                    > NotchLayout(notch: closedNotch, geometry: geometry, hasTrack: false, timerActive: false).body.height)
             capture(panel, to: "\(prefix)-3e-timer-running.png")
             await click("timer.toggle", in: panel)
             await pause(0.3)
@@ -274,6 +288,25 @@ extension NotchController {
             }
             check("clipboard widget lists what was copied", NotchProbe.frames["clip.0"] != nil)
             capture(panel, to: "\(prefix)-3g-clipboard.png")
+            // A copied picture is previewed big when the pointer is on it.
+            let sample = NSImage(size: NSSize(width: 240, height: 140), flipped: false) { rect in
+                NSColor.systemTeal.setFill(); rect.fill()
+                NSColor.white.withAlphaComponent(0.6).setFill()
+                NSBezierPath(ovalIn: rect.insetBy(dx: 70, dy: 30)).fill()
+                return true
+            }
+            if let png = NSBitmapImageRep(data: sample.tiffRepresentation ?? Data())?.representation(using: .png, properties: [:]) {
+                let picture = ClipboardModel.Entry(
+                    image: png, width: 240, height: 140, thumbnail: ClipboardModel.thumbnail(of: sample))
+                services.clipboard.remember(picture)
+                await pause(0.4)
+                services.clipboard.hover(picture, true)
+                await pause(0.5)
+                check("a picture under the pointer is previewed big", NotchProbe.frames["clipboard.preview"] != nil)
+                capture(panel, to: "\(prefix)-3g-clipboard-preview.png")
+                services.clipboard.hover(picture, false)
+                services.clipboard.clear()
+            }
             AppSettings.shared.notchWidgets = widgetsBefore
             notch.widget = .calendar
             await pause(0.3)

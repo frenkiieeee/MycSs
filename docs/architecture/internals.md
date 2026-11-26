@@ -135,9 +135,9 @@ ajustes:
   o todo el día; Intro crea y Esc cancela (spec 009). Se guarda en el calendario y la lista
   por defecto de la Mac.
   Los **recordatorios** se tachan con un clic; el **temporizador** (5, 10, 25, 45 min)
-  sigue corriendo con el notch cerrado y ensancha su lado derecho con la cuenta atrás;
+  sigue corriendo con el notch cerrado y baja una fila bajo el recorte con la cuenta atrás;
   **batería y sistema** muestra batería, CPU y memoria; el **portapapeles** guarda lo
-  último que copias (apagado por defecto, ocho entradas, solo en memoria) y un clic
+  último que copias (apagado por defecto, seis entradas de texto o imagen, solo en memoria) y un clic
   lo vuelve a copiar.
 - **Bandeja**: un sitio para dejar archivos. Se sueltan en el notch, se arrastran
   fuera cuando hacen falta o se mandan por AirDrop. Arrastrar un archivo hacia el

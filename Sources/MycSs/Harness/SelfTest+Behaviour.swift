@@ -19,6 +19,129 @@ extension SelfTest {
         testPlayerOrder()
         testBrowserScripts()
         testFirefoxFamily()
+        testNotificationHistory()
+        testClipboardImages()
+        testTimerLayout()
+        testSurfaces()
+    }
+
+    // MARK: - Spec 015
+
+    @MainActor
+    private static func testNotificationHistory() {
+        print("\n-- Notification history (spec 015) --")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("mycss-history-\(getpid()).json")
+        NotificationHistoryStore.overrideURL = file
+        defer { NotificationHistoryStore.overrideURL = nil; try? FileManager.default.removeItem(at: file) }
+
+        let one = NotchNotification(id: 1, bundleID: "com.apple.MobileSMS", title: "Marta", subtitle: "", body: "Hola", date: Date())
+        let two = NotchNotification(id: 2, bundleID: "com.apple.mail", title: "Factura", subtitle: "", body: "PDF", date: Date())
+        NotificationHistoryStore.save([two, one])
+        let back = NotificationHistoryStore.load()
+        report(back.map(\.id) == [2, 1] && back.first?.body == "PDF", "the history is read back as it was saved")
+        let mode = (try? FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int) ?? 0
+        report(mode == 0o600, "the file can only be read by the user")
+
+        let many = (0..<80).map { NotchNotification(id: Int64($0), bundleID: "x", title: "t", subtitle: "", body: "b", date: Date()) }
+        NotificationHistoryStore.save(many)
+        report(NotificationHistoryStore.load().count == NotificationHistoryStore.limit, "it keeps at most \(NotificationHistoryStore.limit)")
+
+        let model = NotificationsModel()
+        model.logsChanges = false
+        NotificationHistoryStore.save([two, one])
+        let defaults = UserDefaults.standard
+        let keep = defaults.object(forKey: SettingKey.notchNotificationKeepHistory)
+        defer { defaults.set(keep, forKey: SettingKey.notchNotificationKeepHistory) }
+        defaults.removeObject(forKey: SettingKey.notchNotificationKeepHistory)
+        model.start()
+        report(model.history.map(\.id) == [2, 1], "starting brings the last ones back")
+        model.open(two)
+        report(model.history.map(\.id) == [1], "opening one takes it out of the history")
+        model.remove(one)
+        report(model.history.isEmpty, "one can be removed")
+        model.stop()
+        NotificationHistoryStore.erase()
+        report(NotificationHistoryStore.load().isEmpty, "turning the memory off erases the file")
+    }
+
+    @MainActor
+    private static func testClipboardImages() {
+        print("\n-- Clipboard pictures --")
+        let board = NSPasteboard(name: NSPasteboard.Name("mycss.selftest.\(getpid())"))
+        defer { board.releaseGlobally() }
+        let image = NSImage(size: NSSize(width: 40, height: 20), flipped: false) { rect in
+            NSColor.systemPink.setFill(); rect.fill(); return true
+        }
+        board.clearContents()
+        board.writeObjects([image])
+        let entry = ClipboardModel.imageEntry(from: board)
+        report(entry?.isImage == true, "a picture on the pasteboard becomes an entry")
+        report(entry?.preview.hasPrefix("Imagen") == true, "its line says what it is: \(entry?.preview ?? "-")")
+        report((entry?.thumbnail?.size.width ?? 999) <= 320, "the list and the preview get a smaller copy")
+
+        board.clearContents()
+        board.setString("https://example.com/a.png", forType: .string)
+        report(ClipboardModel.imageEntry(from: board) == nil, "text alone is not a picture")
+
+        let model = ClipboardModel(demo: false)
+        if let entry { model.remember(entry); model.remember(entry) }
+        report(model.entries.count == 1, "the same picture twice is kept once")
+        model.remember(ClipboardModel.Entry(text: "hola"))
+        report(model.entries.count == 2 && model.entries.first?.isImage == false, "text and pictures share the list")
+        if let entry { model.hover(entry, true) }
+        let shown = model.entries.first(where: \.isImage)
+        if let shown { model.hover(shown, true) }
+        report(model.hoveredImage?.isImage == true, "pointing at a picture asks for its preview")
+        if let shown { model.hover(shown, false) }
+        report(model.hoveredImage == nil, "moving away closes it")
+        model.clear()
+        report(model.entries.isEmpty, "«Limpiar» empties it")
+    }
+
+    @MainActor
+    private static func testSurfaces() {
+        print("\n-- Notch surfaces (spec 016) --")
+        let defaults = UserDefaults.standard
+        let keys = StyleDomain.notch.keys
+        let saved = keys.reduce(into: [String: Any]()) { if let v = defaults.object(forKey: $1) { $0[$1] = v } }
+        defer { for key in keys { if let v = saved[key] { defaults.set(v, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        for key in keys { defaults.removeObject(forKey: key) }
+
+        let settings = AppSettings.shared
+        report(settings.notchSurface == .solid && settings.notchCorner == 1 && settings.notchTimerStyle == .presets,
+               "the defaults are the notch of always: solid, round as before, four buttons")
+        settings.notchGlass = 5
+        settings.notchCorner = 0
+        report(settings.notchGlass == 0.95 && settings.notchCorner == 0.7, "transparency and corners are kept in range")
+
+        NotchLook.island.apply(to: settings)
+        report(settings.notchSurface == .tinted && settings.notchAccent == .amber && settings.notchTimerStyle == .ruler,
+               "«Isla» is tinted glass in amber with the ruler")
+        NotchLook.glass.apply(to: settings)
+        report(settings.notchSurface == .glass && settings.notchTimerStyle == .presets, "«Cristal» leaves nothing of the island behind")
+        NotchLook.sober.apply(to: settings)
+        report(settings.notchSurface == .solid && settings.notchCorner == 1, "going back to a solid look clears the glass")
+
+        let tinted = AppSettings.NotchAccent.allCases.filter { [.amber, .sky, .rose].contains($0) }
+        report(tinted.count == 3, "the new accents exist")
+        report(Set(StyleDomain.notch.keys).isSuperset(of: [SettingKey.notchSurface, SettingKey.notchGlass, SettingKey.notchCorner, SettingKey.notchTimerStyle]),
+               "a custom style saves the surface too")
+
+        report(TimerRuler.minutes(from: 25, translation: -90) == 35, "dragging the ruler left raises the time")
+        report(TimerRuler.minutes(from: 25, translation: 90) == 15, "and right lowers it")
+        report(TimerRuler.minutes(from: 2, translation: 900) == 1 && TimerRuler.minutes(from: 170, translation: -900) == 180,
+               "the ruler stops at 1 and 180 minutes")
+    }
+
+    @MainActor
+    private static func testTimerLayout() {
+        print("\n-- Timer under the notch --")
+        let geometry = NotchGeometry(notch: CGSize(width: 190, height: 32))
+        let notch = NotchModel()
+        let idle = NotchLayout(notch: notch, geometry: geometry, hasTrack: false, timerActive: false)
+        let running = NotchLayout(notch: notch, geometry: geometry, hasTrack: false, timerActive: true)
+        report(running.kind == .timer && running.body.height > idle.body.height, "a running timer drops a row under the notch")
+        report(running.body.width >= geometry.notch.width + 80, "and the row is wide enough for the time")
     }
 
     // MARK: - Spec 013

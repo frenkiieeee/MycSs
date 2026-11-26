@@ -104,6 +104,15 @@ private struct WidgetHeader: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                if services.notifications.history.count > 1 {
+                    Text("\(services.notifications.history.count)")
+                        .font(.system(size: 9.5, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 15, minHeight: 15)
+                        .background(Capsule().fill(brandYellow))
+                        .contentTransition(.numericText())
+                }
                 if !services.notifications.history.isEmpty {
                     Button {
                         services.notifications.clearHistory()
@@ -120,6 +129,29 @@ private struct WidgetHeader: View {
                 }
             }
             .animation(NotchMotion.swap, value: services.notifications.history.isEmpty)
+            .animation(NotchMotion.swap, value: services.notifications.history.count)
+        case .clipboard:
+            HStack(spacing: 6) {
+                Text("Copiado")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if !services.clipboard.entries.isEmpty {
+                    Button {
+                        services.clipboard.clear()
+                        NotchHaptics.tick()
+                    } label: {
+                        Image(systemName: "trash.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                    .buttonStyle(NotchPress(scale: 0.88))
+                    .help("Limpiar el portapapeles guardado")
+                    .probe("clipboard.clear")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(NotchMotion.swap, value: services.clipboard.entries.isEmpty)
         default:
             Text(current.title)
                 .font(.system(size: 15, weight: .bold))
@@ -449,8 +481,11 @@ private struct RemindersWidget: View {
 private struct TimerWidget: View {
 
     @Bindable var timer: TimerModel
+    /// The style of the timer is a setting: reading this redraws the widget when it changes.
+    @Bindable var revision = SettingsRevision.shared
 
     var body: some View {
+        let _ = revision.value
         Group {
             if timer.isActive || timer.state == .finished {
                 running
@@ -461,7 +496,16 @@ private struct TimerWidget: View {
         .animation(NotchMotion.swap, value: timer.state)
     }
 
+    @ViewBuilder
     private var presets: some View {
+        if AppSettings.shared.notchTimerStyle == .ruler {
+            TimerRuler(timer: timer)
+        } else {
+            presetButtons
+        }
+    }
+
+    private var presetButtons: some View {
         let columns = [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)]
         return LazyVGrid(columns: columns, spacing: 7) {
             ForEach(TimerModel.presets, id: \.self) { minutes in
@@ -658,9 +702,18 @@ private struct ClipboardWidget: View {
                             NotchHaptics.tick()
                         } label: {
                             HStack(spacing: 7) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 9.5, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                if let thumbnail = entry.thumbnail {
+                                    Image(nsImage: thumbnail)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 17, height: 17)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                                } else {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                        .frame(width: 17)
+                                }
                                 Text(entry.preview)
                                     .font(.system(size: 11.5, weight: .medium))
                                     .foregroundStyle(.white.opacity(index == 0 ? 0.95 : 0.7))
@@ -673,11 +726,38 @@ private struct ClipboardWidget: View {
                                 .fill(.white.opacity(index == 0 ? 0.09 : 0.04)))
                         }
                         .buttonStyle(NotchPress(scale: 0.97))
+                        .onHover { clipboard.hover(entry, $0) }
                         .probe("clip.\(index)")
                     }
                 }
                 .animation(NotchMotion.swap, value: clipboard.entries)
                 .padding(.top, 2)
+                // A picture under the pointer is shown big over the list. It lets the pointer
+                // through, so the row keeps its hover and a click still copies it.
+                .overlay {
+                    if let entry = clipboard.hoveredImage, let picture = entry.thumbnail {
+                        ZStack(alignment: .bottomTrailing) {
+                            Image(nsImage: picture)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(4)
+                            Text(entry.preview)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Capsule().fill(.black.opacity(0.6)))
+                                .padding(5)
+                        }
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(white: 0.09)))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: .black.opacity(0.5), radius: 8)
+                        .transition(.scale(scale: 0.94).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                        .probe("clipboard.preview")
+                    }
+                }
+                .animation(NotchMotion.swap, value: clipboard.hoveredID)
             }
         }
     }

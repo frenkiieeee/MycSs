@@ -1,11 +1,14 @@
 # Publicar una versión
 
-1. Escribe la sección `## [x.y.z] - fecha` en `CHANGELOG.md` (pasa lo de `[Unreleased]` a ella).
+1. Ve anotando los cambios bajo `## [Unreleased]` de `CHANGELOG.md` mientras trabajas (`./scripts/changelog.py check` dice si hay algo). No hace falta escribir la sección de la versión: lo hace el script.
 2. Haz commit de todo lo pendiente (el árbol debe estar limpio).
-3. `./scripts/release.sh x.y.z` comprueba, sube `VERSION`, ejecuta `verify.sh --notch`, genera `dist/MycSs-x.y.z.dmg` con su `.sha256` y rellena el cask.
-4. Ejecuta a mano lo que imprime al final: commit de `VERSION`, `CHANGELOG.md` y el cask, `git tag -a vx.y.z`, `git push origin main --tags`.
-5. El workflow `release.yml` construye el DMG y crea la release al llegar la etiqueta. Si prefieres subirlo tú, usa el de `dist/`.
-6. Copia `packaging/homebrew/mycss.rb` al tap `frenkiieeee/homebrew-mycss` (`Casks/mycss.rb`).
+3. `./scripts/release.sh x.y.z` comprueba, sube `VERSION`, convierte `[Unreleased]` en `## [x.y.z] - fecha` (con los enlaces de comparación), ejecuta `verify.sh --notch` y genera `dist/MycSs-x.y.z.dmg` con su `.sha256`.
+4. Ejecuta a mano lo que imprime al final: commit de `VERSION` y `CHANGELOG.md`, `git tag -a vx.y.z`, `git push origin main --tags`.
+5. El workflow `release.yml` construye el DMG, crea la release con las notas del changelog y, en un segundo trabajo, apunta `Casks/mycss.rb` a la versión nueva con la suma del archivo publicado (un commit del bot en `main`). No hay que copiar nada a ningún tap: ver [009](decisions/009-tap-en-el-repositorio.md).
+
+## Rama principal: nightly
+
+Cada push a `main` (salvo cambios solo de documentos o de `Casks/`) ejecuta `nightly.yml`, que reemplaza la pre-release `nightly` con un DMG nuevo. Quien instaló `mycss@nightly` lo recibe con `brew upgrade --cask --greedy-latest mycss@nightly`.
 
 ## Reglas de versión
 Ver `docs/decisions/006-versionado-y-distribucion.md`.

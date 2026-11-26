@@ -7,6 +7,28 @@ All notable changes to MycSs are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Notch surfaces: besides the plain black, the notch can be **glass** (it blurs what is
+  behind it, with a sheen and a rim of light) or **tinted glass** (the accent colour
+  poured into it), with its own transparency and roundness of the corners (Notch,
+  Aspecto). The idle notch stays black so it still joins the cut-out. Two new notch
+  styles, "Cristal" and "Isla" (amber tinted glass, large corners, ring volume), and
+  three new accents (amber, sky, rose). All of it is saved in your own styles, so a
+  combination can be kept as a template.
+- A ruler for the timer, like the iPhone's island: drag it sideways to pick the minutes
+  and press "Iniciar" (Notch, Aspecto, Temporizador; "Isla" uses it).
+- Homebrew from this very repository, always up to date: `brew tap frenkiieeee/mycss
+  https://github.com/frenkiieeee/MycSs`, then `brew install --cask mycss` for the
+  numbered releases or `mycss@nightly` for what is on `main` (rebuilt on every push,
+  `brew upgrade --cask --greedy-latest mycss@nightly`). The release workflow points
+  the stable cask at each new release by itself.
+- `scripts/changelog.py` (check, release, notes): the release turns `[Unreleased]` into
+  the new version with its date and links, and its notes become the GitHub release.
+- The notifications the notch showed are kept between runs (the last 50, in a file only
+  the user can read, off with "Recordar el historial al reiniciar"). Opening one takes it
+  out of "Avisos"; the widget header counts what is left.
+- The clipboard widget keeps pictures (a screenshot copied with Ctrl, an image copied
+  from a page or the Finder), shown big over the list when the pointer is on one, and a
+  button to clear it (the widget is titled "Copiado" now so it fits).
 - The browser as a player: what plays in a tab of Chrome, Safari, Brave, Edge, Arc,
   Vivaldi, Firefox, Zen, Floorp, LibreWolf or Waterfox shows and can be controlled like
   Spotify, with the tab's icon as the cover. "Automático" includes it (General, Player,
@@ -33,6 +55,9 @@ All notable changes to MycSs are listed here. The format follows
   can be turned off and has six animations (fade, slide, grow, pop, drop, blur).
 
 ### Changed
+- The timer drops under the closed notch, like a notification, instead of squeezing the
+  time into its side: it fits at any size of the notch, and the sides keep the music.
+- The names and icons of the apps in notifications are looked up once, not on every redraw.
 - Notifications reach the notch as soon as macOS stores them (about 50 ms; before, up
   to a second): the database is watched instead of read every second.
 - With the notch open, a new song animates: the cover fades in over the old one
@@ -40,6 +65,8 @@ All notable changes to MycSs are listed here. The format follows
   animation (also for songs skipped in a row).
 
 ### Fixed
+- The "Minimal" style left the cover stuck to the top while the lyrics were in the
+  middle; without the clock the cover is now centred with them.
 - The open notch no longer shifts when the notifications widget is shown: it is one row
   shorter, titled "Avisos", and its "Borrar" button is in the header.
 - With Spotify's DJ, a song could keep the previous singer's cover for good: a cover

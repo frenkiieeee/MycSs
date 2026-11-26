@@ -10,7 +10,7 @@ Responder desde el notch, acciones de la notificación (botones de la app), soni
 
 ## Datos
 - `NotificationsModel` sigue leyendo la base de `usernoted` (ver [006](006-notifications.md) y [ADR 003](../decisions/003-notificaciones.md)), pero ya no pregunta cada segundo: vigila la carpeta `db2` y el archivo `db-wal` con `DispatchSource` (el sistema avisa al escribir) y lee al momento. Un temporizador de 3 s queda de red por si un aviso se pierde.
-- Historial en memoria: las 30 últimas que llegaron, con lo que se decidió con cada una. Se borra al salir.
+- Historial en memoria: las 30 últimas que llegaron, con lo que se decidió con cada una. Desde la [015](015-notch-polish-and-tap.md) se guarda entre ejecuciones (ajuste, 50 como máximo).
 - Reglas por app (`notchNotificationRules`, `bundleID -> regla`): **Notch y sistema**, **Solo notch** (se quita el aviso del sistema) y **Solo sistema** (MycSs no la enseña). Una regla para las apps nuevas (`notchNotificationDefault`, por defecto «Notch y sistema», que es lo de antes).
 - Las apps de la lista salen de la propia base (las que tienen notificaciones guardadas) y del historial.
 
