@@ -23,6 +23,7 @@ extension SelfTest {
         testClipboardImages()
         testTimerLayout()
         testSurfaces()
+        testPlainScreens()
     }
 
     // MARK: - Spec 015
@@ -96,6 +97,52 @@ extension SelfTest {
         report(model.hoveredImage == nil, "moving away closes it")
         model.clear()
         report(model.entries.isEmpty, "«Limpiar» empties it")
+    }
+
+    @MainActor
+    private static func testPlainScreens() {
+        print("\n-- Screens without a notch (spec 017) --")
+        let defaults = UserDefaults.standard
+        let keys = StyleDomain.notch.keys
+        let saved = keys.reduce(into: [String: Any]()) { if let v = defaults.object(forKey: $1) { $0[$1] = v } }
+        defer { for key in keys { if let v = saved[key] { defaults.set(v, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        for key in keys { defaults.removeObject(forKey: key) }
+        let settings = AppSettings.shared
+        let notch = NotchModel()
+
+        let hardware = NotchGeometry(notch: CGSize(width: 185, height: 32))
+        let attached = NotchGeometry.plain(menuBar: 24)
+        report(hardware.hasHardwareNotch && !attached.hasHardwareNotch, "a screen with a cut-out is told from one without")
+        report(!hardware.isIsland && hardware.topInset == 0 && hardware.contentGap == 185,
+               "a notch keeps its cut-out: not an island, no inset, the sides keep clear of it")
+
+        // The default: at the very top, inside the menu bar.
+        report(!attached.isIsland && attached.topInset == 0 && attached.notch.height == 24 && attached.contentGap == 22,
+               "without a notch it hangs from the top edge with the height of the menu bar, not taller")
+        report(attached.panelSize.height == hardware.panelSize.height, "and needs no room under the bar")
+        report(NotchLayout(notch: notch, geometry: attached, hasTrack: false).body == CGSize(width: 110, height: 24)
+               && attached.restsHidden, "it rests hidden, with a zone in the bar to point at")
+
+        // The floating island, when asked for.
+        settings.notchPlainStyle = .island
+        let island = NotchGeometry.plain(menuBar: 24)
+        report(island.isIsland && island.topInset == 30, "the island hangs under the menu bar")
+        let rest = NotchLayout(notch: notch, geometry: island, hasTrack: false)
+        report(rest.kind == .idle && rest.body.height == 0, "hidden, it has no height: nothing under the bar to point at by mistake")
+        let music = NotchLayout(notch: { let n = NotchModel(); n.isListening = true; return n }(), geometry: island, hasTrack: true)
+        report(music.kind == .wings && music.body.width >= island.notch.width && music.body.width < 200
+                && music.body.height == 30 && music.ear == 0,
+               "music makes a compact island: \(Int(music.body.width)) x \(Int(music.body.height))")
+        report(island.panelSize.height == hardware.panelSize.height + island.topInset, "the window has room for the gap under the bar")
+
+        settings.notchPlainStyle = .attached
+        settings.notchPlainRest = .visible
+        report(NotchLayout(notch: notch, geometry: attached, hasTrack: false).body == attached.notch, "it can stay visible at rest")
+
+        settings.notchPlainWidth = 10
+        report(settings.notchPlainWidth == 70, "the zone keeps a usable width")
+        report(Set(StyleDomain.notch.keys).isSuperset(of: [SettingKey.notchPlainStyle, SettingKey.notchPlainRest, SettingKey.notchPlainWidth]),
+               "a custom style saves these too")
     }
 
     @MainActor

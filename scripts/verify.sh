@@ -50,6 +50,11 @@ if [ "${1:-}" = "--notch" ]; then
     echo "$out" | grep -E "OK  |FAIL|passed|FAILED"
     if echo "$out" | grep -q "FAIL"; then fail=1; fi
 
+    echo ">> notch on a screen without a notch (--no-notch)"
+    out=$(./.build/debug/MycSs --demo --no-notch --notch-selftest /tmp/mycss-notch-plain 2>&1)
+    echo "$out" | grep -E "FAIL|passed|FAILED"
+    if echo "$out" | grep -q "FAIL"; then fail=1; fi
+
     echo ">> settings previews (pictures, and the styles are undone)"
     out=$(./.build/debug/MycSs --demo --settings-snapshot /tmp/mycss-settings 2>&1)
     echo "$out" | grep "settings snapshot"

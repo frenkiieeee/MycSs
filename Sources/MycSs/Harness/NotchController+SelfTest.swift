@@ -21,7 +21,7 @@ extension NotchController {
 
     /// Renders the notch to a PNG in the given state, for checking its look.
     func snapshot(to path: String, _ shot: Shot) {
-        let g = NotchGeometry(notch: CGSize(width: 185, height: 32))
+        let g = DemoFlags.noNotch ? NotchGeometry.plain() : NotchGeometry(notch: CGSize(width: 185, height: 32))
         let demo = NotchModel()
         switch shot {
         case .closed: break
@@ -120,14 +120,16 @@ extension NotchController {
             await pause(0.5)
             capture(panel, to: "\(prefix)-0-closed.png")
             check("the window is in a Space of its own (it stays while the desktops slide)", isPinned)
+            let withMusic = NotchLayout(notch: notch, geometry: geometry, hasTrack: true)
             check("with music, the closed notch grows its sides",
-                  NotchLayout(notch: notch, geometry: geometry, hasTrack: true).body.width > geometry.notch.width)
+                  withMusic.kind == .wings && withMusic.body.width >= geometry.restSize.width
+                    && withMusic.body.width > geometry.contentGap)
 
             // Nothing playing: it folds back into the hardware notch.
             notch.isListening = false
             await pause(0.6)
             let folded = NotchLayout(notch: notch, geometry: geometry, hasTrack: true)
-            check("nothing playing: the notch folds into the hardware one", folded.body == geometry.notch && folded.ear == 0)
+            check("nothing playing: the notch folds into the hardware one", folded.body == geometry.restSize && folded.ear == 0)
             capture(panel, to: "\(prefix)-0b-idle.png")
             notch.isListening = true
             await pause(0.6)
