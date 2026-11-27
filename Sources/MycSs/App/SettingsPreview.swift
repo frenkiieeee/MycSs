@@ -309,6 +309,9 @@ final class NotchPreviewState {
     let model = LyricsViewModel(demo: true)
     let services = NotchServices(demo: true)
     private(set) var scene: NotchPreviewScene = .open
+    /// Which kind of screen the preview shows: with a notch, or without (spec 017). It
+    /// starts as the Mac's own screen, and can be changed to try the other.
+    var showsNoNotch = !NSScreen.screens.contains(where: NotchController.hasHardwareNotch)
     /// The level the volume and brightness scenes show.
     private(set) var level: Float = 0.5
     @ObservationIgnored private var started = false
@@ -390,7 +393,7 @@ struct NotchStage: View {
     }
 
     var body: some View {
-        let g = NotchGeometry(notch: CGSize(width: 185, height: 32))
+        let g = state.showsNoNotch ? NotchGeometry.plain() : NotchGeometry(notch: CGSize(width: 185, height: 32))
         let scale = min(1, size.width / Self.room.width)
         ZStack(alignment: .top) {
             // A stand-in for the desktop, under the menu bar.
@@ -447,6 +450,15 @@ struct NotchPreviewCard: View {
             }
             .frame(maxWidth: 640)
             StyleViewingBanner(domain: .notch)
+
+            Picker("Pantalla", selection: $state.showsNoNotch) {
+                Text("Con notch").tag(false)
+                Text("Sin notch").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 260)
+            .help("Cómo se ve en una pantalla con notch o sin él")
 
             Picker("Momento", selection: Binding(get: { state.scene }, set: { state.show($0) })) {
                 ForEach(NotchPreviewScene.allCases) { scene in

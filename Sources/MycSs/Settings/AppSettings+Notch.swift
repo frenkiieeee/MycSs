@@ -300,6 +300,51 @@ extension AppSettings {
         }
     }
 
+    // MARK: - Notch: screens without a notch (spec 017)
+
+    /// The shape on a screen with no cut-out.
+    enum NotchPlainStyle: String, CaseIterable {
+        /// Hanging from the top edge, inside the menu bar, like a notch.
+        case attached
+        /// A floating island under the menu bar, round on every side.
+        case island
+
+        var title: String {
+            switch self {
+            case .attached: return "Arriba del todo, en la barra"
+            case .island: return "Isla flotante bajo la barra"
+            }
+        }
+    }
+
+    var notchPlainStyle: NotchPlainStyle {
+        get { NotchPlainStyle(rawValue: defaults.string(forKey: SettingKey.notchPlainStyle) ?? "") ?? .attached }
+        set { defaults.set(newValue.rawValue, forKey: SettingKey.notchPlainStyle) }
+    }
+
+    /// What a screen with no cut-out shows when there is nothing to show.
+    enum NotchPlainRest: String, CaseIterable {
+        case hidden, visible
+
+        var title: String {
+            switch self {
+            case .hidden: return "No se ve nada"
+            case .visible: return "Píldora siempre visible"
+            }
+        }
+    }
+
+    var notchPlainRest: NotchPlainRest {
+        get { NotchPlainRest(rawValue: defaults.string(forKey: SettingKey.notchPlainRest) ?? "") ?? .hidden }
+        set { defaults.set(newValue.rawValue, forKey: SettingKey.notchPlainRest) }
+    }
+
+    /// The width of the resting zone, in points.
+    var notchPlainWidth: Double {
+        get { Self.clamp(defaults.object(forKey: SettingKey.notchPlainWidth) as? Double ?? 110, 70, 220) }
+        set { defaults.set(Self.clamp(newValue, 70, 220), forKey: SettingKey.notchPlainWidth) }
+    }
+
     // MARK: - Notch: surface (spec 016)
 
     /// What the notch is made of.

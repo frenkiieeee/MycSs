@@ -57,6 +57,7 @@ struct NotchSettingsPage: View {
                 case .look:
                     sizeAndMotion
                     openAndClose
+                    plainScreens
                     appearance
                 case .music:
                     music
@@ -192,6 +193,34 @@ struct NotchSettingsPage: View {
             El ritmo real escucha el audio del sistema solo mientras suena música, lo reduce a \
             cinco números y lo descarta: no graba ni envía nada. La primera vez, macOS pide el \
             permiso de grabación de audio del sistema; sin él, las barras usan la animación de siempre.
+            """)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// What a screen with no cut-out looks like (spec 017).
+    private var plainScreens: some View {
+        Section("Pantallas sin notch") {
+            Picker("Forma", selection: $settings.notchPlainStyle) {
+                ForEach(AppSettings.NotchPlainStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            Picker("En reposo", selection: $settings.notchPlainRest) {
+                ForEach(AppSettings.NotchPlainRest.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            HStack {
+                Text("Ancho de la zona")
+                Slider(value: $settings.notchPlainWidth, in: 70...220)
+                Text("\(Int(settings.notchPlainWidth)) pt")
+                    .monospacedDigit()
+                    .frame(width: 50, alignment: .trailing)
+            }
+            Text("""
+            Vale para un Mac sin notch y para otras pantallas. Por defecto queda arriba del todo, dentro de la barra \
+            de menús; la isla flotante la baja justo debajo. Si en reposo no se ve nada, la música la hace aparecer; para \
+            abrirla, lleva el puntero al centro del borde de arriba de la pantalla (del ancho de \
+            arriba) o elige «Abrir el notch» en el menú de MycSs. En «Con un clic», pulsa la isla. \
+            Con «Sin notch» arriba, la vista previa enseña cómo queda aunque tu Mac tenga recorte.
             """)
             .font(.callout)
             .foregroundStyle(.secondary)
