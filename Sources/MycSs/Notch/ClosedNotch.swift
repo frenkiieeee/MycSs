@@ -26,7 +26,7 @@ struct ClosedNotch: View {
                 leading
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, NotchGeometry.sidePadding)
-                Color.clear.frame(width: geometry.notch.width)
+                Color.clear.frame(width: geometry.contentGap)
                 trailing(accent: accent)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing, NotchGeometry.sidePadding)

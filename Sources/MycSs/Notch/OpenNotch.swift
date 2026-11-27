@@ -52,7 +52,7 @@ struct Header: View {
             tab(.home, symbol: "house.fill")
             tab(.shelf, symbol: "tray.fill")
 
-            Spacer(minLength: geometry.notch.width)
+            Spacer(minLength: geometry.contentGap)
 
             if let hud = notch.hud {
                 // The value, in the strip, where it can be seen while the notch is open.
@@ -101,7 +101,7 @@ struct Header: View {
             }
         }
         .padding(.horizontal, 22)
-        .frame(height: geometry.notch.height)
+        .frame(height: geometry.openHeader)
         .animation(NotchMotion.swap, value: notch.notification)
         .animation(NotchMotion.swap, value: notch.tab)
     }

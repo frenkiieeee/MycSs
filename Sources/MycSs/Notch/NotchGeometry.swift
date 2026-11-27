@@ -5,8 +5,59 @@ import UniformTypeIdentifiers
 
 /// The size of the physical notch and of the open one.
 struct NotchGeometry {
-    /// The cut-out in the screen (or a virtual one on a Mac without a notch).
-    var notch: CGSize
+    /// The cut-out of the screen, when it has one. `nil` on a screen without a notch.
+    private var hardware: CGSize?
+    /// The height of the menu bar of the screen (spec 017).
+    var menuBar: CGFloat = 24
+
+    /// A screen with a physical cut-out of this size.
+    init(notch: CGSize) {
+        hardware = notch
+    }
+
+    /// A screen without a notch (spec 017): the shape comes from the settings.
+    static func plain(menuBar: CGFloat = 24) -> NotchGeometry {
+        var geometry = NotchGeometry(notch: .zero)
+        geometry.hardware = nil
+        geometry.menuBar = menuBar
+        return geometry
+    }
+
+    var hasHardwareNotch: Bool { hardware != nil }
+
+    /// A floating island, under the menu bar.
+    var isIsland: Bool { !hasHardwareNotch && AppSettings.shared.notchPlainStyle == .island }
+    /// Nothing is drawn while there is nothing to show.
+    var restsHidden: Bool { !hasHardwareNotch && AppSettings.shared.notchPlainRest == .hidden }
+
+    /// The cut-out, or on a screen without one, the zone the notch rests in.
+    var notch: CGSize {
+        if let hardware { return hardware }
+        return CGSize(width: CGFloat(AppSettings.shared.notchPlainWidth), height: isIsland ? 30 : menuBar)
+    }
+
+    /// The space in the middle of the closed notch that the sides leave free: the
+    /// cut-out, or just a little breathing room where there is none.
+    var contentGap: CGFloat { hasHardwareNotch ? notch.width : 22 }
+
+    /// What the kinds that write a line of text under the cut-out (a notification, the
+    /// title of a new song, the timer) take as width in the middle: where there is no
+    /// cut-out the text still needs room.
+    var textGap: CGFloat { hasHardwareNotch ? notch.width : 150 }
+
+    /// The size of the idle notch. A floating island that rests hidden has no height:
+    /// there is nothing under the menu bar to point at by mistake.
+    var restSize: CGSize {
+        isIsland && restsHidden ? CGSize(width: notch.width, height: 0) : notch
+    }
+
+    /// The height of the strip with the tabs and the gear when the notch is open. A
+    /// screen without a cut-out keeps the same layout as one with it, whatever the
+    /// height of its menu bar.
+    var openHeader: CGFloat { hasHardwareNotch ? notch.height : 32 }
+
+    /// How far under the top edge of the screen the shape hangs.
+    var topInset: CGFloat { isIsland ? menuBar + 6 : 0 }
 
     /// The open notch is designed at this size and then scaled by the user's setting.
     static let baseOpen = CGSize(width: 640, height: 176)
@@ -51,7 +102,7 @@ struct NotchGeometry {
     var panelSize: CGSize {
         CGSize(
             width: Self.baseOpen.width * Self.maxScale + (Self.openEar + Self.shadowPadding) * 2,
-            height: Self.baseOpen.height * Self.maxScale + Self.shadowPadding + 8
+            height: Self.baseOpen.height * Self.maxScale + Self.shadowPadding + 8 + topInset
         )
     }
 }
@@ -75,6 +126,10 @@ struct NotchLayout: Equatable {
     init(notch: NotchModel, geometry: NotchGeometry, hasTrack: Bool, timerActive: Bool = false,
          display: CGDirectDisplayID = 0) {
         let cut = geometry.notch
+        // Where a notch has a cut-out, the sides keep clear of it; a screen without one
+        // only leaves a little room.
+        let gap = geometry.contentGap
+        let textGap = geometry.textGap
         let settings = AppSettings.shared
         let music = hasTrack && notch.isListening
         let wings = settings.notchWings && music
@@ -88,13 +143,13 @@ struct NotchLayout: Equatable {
             bottomRadius = 28 * min(NotchGeometry.scale, 1.15)
         } else if notch.hud != nil {
             kind = .hud
-            body = CGSize(width: cut.width + NotchGeometry.hudWing * 2, height: cut.height)
+            body = CGSize(width: gap + NotchGeometry.hudWing * 2, height: cut.height)
             ear = 6
             bottomRadius = 12
         } else if notch.notification != nil {
             kind = .notification
             body = CGSize(
-                width: cut.width + (NotchGeometry.wing + NotchGeometry.notificationWing) * 2,
+                width: textGap + (NotchGeometry.wing + NotchGeometry.notificationWing) * 2,
                 height: cut.height + NotchGeometry.notificationRow
             )
             ear = 6
@@ -103,13 +158,13 @@ struct NotchLayout: Equatable {
             kind = .peek
             if settings.notchPeekStyle == .sides {
                 body = CGSize(
-                    width: cut.width + (NotchGeometry.wing + NotchGeometry.peekSide) * 2,
+                    width: gap + (NotchGeometry.wing + NotchGeometry.peekSide) * 2,
                     height: cut.height
                 )
                 bottomRadius = 14
             } else {
                 body = CGSize(
-                    width: cut.width + NotchGeometry.wing * 2 + NotchGeometry.peekExtraWidth,
+                    width: textGap + NotchGeometry.wing * 2 + NotchGeometry.peekExtraWidth,
                     height: cut.height + NotchGeometry.peekRow
                 )
                 bottomRadius = 18
@@ -118,22 +173,28 @@ struct NotchLayout: Equatable {
         } else if timerActive {
             kind = .timer
             body = CGSize(
-                width: cut.width + NotchGeometry.wing * 2 + NotchGeometry.peekExtraWidth * 0.5,
+                width: textGap + NotchGeometry.wing * 2 + NotchGeometry.peekExtraWidth * 0.5,
                 height: cut.height + NotchGeometry.timerRow
             )
             ear = 6
             bottomRadius = 18
         } else if wings {
             kind = .wings
-            body = CGSize(width: cut.width + NotchGeometry.wing * 2, height: cut.height)
+            // Never narrower than the zone it rests in.
+            body = CGSize(width: max(gap + NotchGeometry.wing * 2, cut.width), height: cut.height)
             ear = 6
             bottomRadius = 12
         } else {
             // Idle: exactly the hardware notch, so nothing shows.
             kind = .idle
-            body = cut
+            body = geometry.restSize
             ear = 0
             bottomRadius = 10
+        }
+        // A floating island is round on every side and has no ears (spec 017).
+        if geometry.isIsland {
+            ear = 0
+            bottomRadius = kind == .open ? bottomRadius : 24
         }
         // The user's roundness (spec 016); the idle notch keeps the hardware one.
         if kind != .idle { bottomRadius *= CGFloat(settings.notchCorner) }

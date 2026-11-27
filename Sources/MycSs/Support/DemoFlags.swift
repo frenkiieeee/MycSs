@@ -7,6 +7,7 @@ import Foundation
 /// - `--demo-nolyrics`: the demo song has no lyrics.
 /// - `--demo-paused`: the demo song starts paused.
 /// - `--demo-mascot`: the cover of the demo is the mascot.
+/// - `--no-notch`: the main screen is treated as one without a notch (spec 017).
 /// - `--snapshot-loading`: the overlay shows the state while lyrics load.
 enum DemoFlags {
     private static let arguments = CommandLine.arguments
@@ -15,5 +16,6 @@ enum DemoFlags {
     static let noLyrics = arguments.contains("--demo-nolyrics")
     static let paused = arguments.contains("--demo-paused")
     static let mascot = arguments.contains("--demo-mascot")
+    static let noNotch = arguments.contains("--no-notch")
     static let loading = arguments.contains("--snapshot-loading")
 }

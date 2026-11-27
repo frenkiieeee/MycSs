@@ -48,6 +48,7 @@ struct NotchView: View {
         )
         let scale = NotchGeometry.scale
         let settings = AppSettings.shared
+        let shape = shapeOf(layout)
 
         // Opening to the sides first: the height waits a moment for the width.
         let growing = layout.isOpen
@@ -89,14 +90,15 @@ struct NotchView: View {
         .background(
             NotchSurfaceView(
                 surface: settings.notchSurface, strength: settings.notchGlass,
-                tint: NotchPalette.accent(model), isIdle: layout.kind == .idle,
-                shape: NotchShape(topRadius: layout.ear, bottomRadius: layout.bottomRadius),
+                tint: NotchPalette.accent(model), isIdle: layout.kind == .idle, shape: shape,
+                drawsBase: !(geometry.restsHidden && layout.kind == .idle),
                 drawsBlur: !isPreview
             )
         )
-        .clipShape(NotchShape(topRadius: layout.ear, bottomRadius: layout.bottomRadius))
+        .clipShape(shape)
         .animation(widthAnimation, value: layout.bottomRadius)
-        .shadow(color: .black.opacity(layout.isOpen ? 0.45 : 0), radius: 14, y: 6)
+        // A floating island also throws a soft shadow when it is not open.
+        .shadow(color: .black.opacity(layout.isOpen ? 0.45 : (geometry.isIsland && layout.kind != .idle ? 0.35 : 0)), radius: 14, y: 6)
         .contentShape(Rectangle())
         .onHover { notch.hover($0, display: display) }
         .onTapGesture {
@@ -110,7 +112,16 @@ struct NotchView: View {
                 notch.open()
             }
         }
+        // A floating island hangs under the menu bar (spec 017).
+        .padding(.top, geometry.topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Flat on top with curved ears like a notch, or round on every side for an island.
+    private func shapeOf(_ layout: NotchLayout) -> AnyShape {
+        geometry.isIsland
+            ? AnyShape(RoundedRectangle(cornerRadius: layout.bottomRadius, style: .continuous))
+            : AnyShape(NotchShape(topRadius: layout.ear, bottomRadius: layout.bottomRadius))
     }
 }
 

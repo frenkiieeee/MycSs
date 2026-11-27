@@ -148,18 +148,7 @@ final class NotchController {
         guard let screen, let id = screen.displayID else { return }
         displayID = id
         screenFrame = screen.frame
-
-        // The cut-out is the gap between the two usable areas at the top.
-        if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea,
-           screen.safeAreaInsets.top > 0 {
-            geometry = NotchGeometry(notch: CGSize(
-                width: max(right.minX - left.maxX, 120),
-                height: screen.safeAreaInsets.top
-            ))
-        } else {
-            // No notch: a pill the size of a typical one.
-            geometry = NotchGeometry(notch: CGSize(width: 170, height: 28))
-        }
+        geometry = notchGeometry(for: screen)
 
         let size = geometry.panelSize
         let frame = NSRect(
@@ -238,16 +227,41 @@ final class NotchController {
 
     // MARK: - Other screens
 
-    /// The size of the cut-out of a screen, or a pill where there is none.
+    /// Opens the notch from the menu bar, or closes it (spec 017): the way in when
+    /// it rests hidden and there is no cut-out to point at.
+    func toggleFromMenu() {
+        guard panel != nil else { return }
+        if notch.isOpen {
+            notch.close("the menu")
+        } else {
+            notch.hoverDisplay = displayID
+            notch.open(tab: .home)
+        }
+    }
+
+    /// Whether a screen has a physical cut-out.
+    static func hasHardwareNotch(_ screen: NSScreen) -> Bool {
+        screen.safeAreaInsets.top > 0 && screen.auxiliaryTopLeftArea != nil && screen.auxiliaryTopRightArea != nil
+    }
+
+    /// The height of the menu bar of a screen (24 when it is hidden).
+    static func menuBarHeight(of screen: NSScreen) -> CGFloat {
+        let measured = screen.frame.maxY - screen.visibleFrame.maxY
+        return measured >= 18 && measured <= 48 ? measured : 24
+    }
+
+    /// The cut-out of a screen, or the shape for one without it (spec 017). The main
+    /// screen can be told to act as one without a notch with `--no-notch`.
     private func notchGeometry(for screen: NSScreen) -> NotchGeometry {
-        if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea,
-           screen.safeAreaInsets.top > 0 {
+        if Self.hasHardwareNotch(screen), !(DemoFlags.noNotch && screen.displayID == (NSScreen.main?.displayID)) {
+            // The cut-out is the gap between the two usable areas at the top.
+            let left = screen.auxiliaryTopLeftArea ?? .zero, right = screen.auxiliaryTopRightArea ?? .zero
             return NotchGeometry(notch: CGSize(
                 width: max(right.minX - left.maxX, 120),
                 height: screen.safeAreaInsets.top
             ))
         }
-        return NotchGeometry(notch: CGSize(width: 170, height: 28))
+        return .plain(menuBar: Self.menuBarHeight(of: screen))
     }
 
     /// Keeps one notch on every other screen while the setting asks for it, and
@@ -479,9 +493,18 @@ final class NotchController {
             display: id
         )
         let width = layout.body.width + layout.ear * 2
+        // A floating island that rests hidden is not under the menu bar: it is
+        // reached from the top edge of the screen, in a strip as wide as its zone.
+        if layout.kind == .idle, geo.isIsland, geo.restsHidden {
+            let strip = max(geo.menuBar, 8)
+            return CGRect(
+                x: frame.midX - geo.notch.width / 2 - padding, y: frame.maxY - strip,
+                width: geo.notch.width + padding * 2, height: strip + padding
+            )
+        }
         return CGRect(
             x: frame.midX - width / 2 - padding,
-            y: frame.maxY - layout.body.height - padding,
+            y: frame.maxY - geo.topInset - layout.body.height - padding,
             width: width + padding * 2,
             height: layout.body.height + padding
         )

@@ -206,6 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lyrics.target = self
         menu.addItem(lyrics)
 
+        // The notch, for a screen where it rests hidden or that has no cut-out (spec 017).
+        if AppSettings.shared.notchEnabled {
+            let notchItem = NSMenuItem(title: "Abrir el notch", action: #selector(toggleNotch), keyEquivalent: "")
+            notchItem.target = self
+            menu.addItem(notchItem)
+        }
+
         // Development aid: show the overlay without locking the screen.
         let preview = NSMenuItem(
             title: "Vista previa (sin bloquear)",
@@ -271,6 +278,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if lockState.isLocked {
             DisplayPower.apply(AppSettings.shared.powerMode)
         }
+    }
+
+    @objc @MainActor private func toggleNotch() {
+        notchController.toggleFromMenu()
     }
 
     @objc @MainActor private func togglePresentation() {

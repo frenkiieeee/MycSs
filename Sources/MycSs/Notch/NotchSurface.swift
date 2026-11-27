@@ -16,13 +16,17 @@ struct NotchSurfaceView: View {
     let strength: Double
     let tint: Color
     let isIdle: Bool
-    let shape: NotchShape
+    let shape: AnyShape
+    /// False on a screen without a notch that rests hidden: nothing is drawn at rest.
+    var drawsBase = true
     /// A settings preview or a picture has no window of its own, so nothing to blur.
     var drawsBlur = true
 
     var body: some View {
         ZStack {
             Color.black
+                .opacity(drawsBase ? 1 : 0)
+                .animation(.smooth(duration: 0.3), value: drawsBase)
             if surface != .solid {
                 glass
                     .opacity(isIdle ? 0 : 1)
