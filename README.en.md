@@ -30,13 +30,13 @@ Always up to date: `brew upgrade --cask mycss` brings each new release. Want wha
 ## What it does
 
 - **Lyrics on the lock screen**, lit word by word, for Spotify, Apple Music and browser tabs (Chrome, Safari, Arc, Firefox, Zen...), with the cover, a clock and an animated background that follows the album colours. It also opens as a screensaver (⌃⌥L).
-- **A notch that does much more than hide the camera**: music with cover and visualiser, instant notifications with a rule per app (notch, system or both) and a history that survives a restart, volume, brightness and keyboard light indicators, and widgets: calendar, reminders, a timer that drops under the notch, system, a clipboard with text and pictures, and a file shelf. It works on several screens.
+- **A notch that does much more than hide the camera**: music with cover and visualiser, instant notifications with a rule per app (notch, system or both) and a history that survives a restart, volume, brightness and keyboard light indicators, and widgets: calendar, reminders, a timer that drops under the notch, system, a clipboard with text and pictures, and a file shelf. It works on several screens, and on Macs **without a notch** it sits at the very top, inside the menu bar, invisible until there is music or a notification (or a floating island under the bar, if you prefer).
 - **Yours to the last detail**: fonts, highlight effect, clock, backgrounds, animations, notch size and timing. Save it all as a **style**, preview it live and undo whenever you want.
 - **Private and free**: everything runs on your Mac, no accounts, no analytics, MIT licence.
 
 ## Requirements
 
-macOS 15 or later, and Spotify or Apple Music. The full notch needs a Mac with a notch; other Macs get a pill at the top centre.
+macOS 15 or later, and Spotify or Apple Music. Any Mac: with a notch it merges with the cut-out; without one it sits at the very top, inside the menu bar (to open it, move the pointer to the top centre of the screen or use "Abrir el notch" in the menu).
 
 ## Other ways to install
 

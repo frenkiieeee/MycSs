@@ -42,7 +42,7 @@ La letra aparece en grande, **iluminada palabra a palabra** al ritmo de la voz, 
 - **Avisos sin ruido**: las notificaciones llegan al notch al instante. Decide app por app si salen en el notch, en el sistema o en los dos, y revisa las últimas en el panel «Avisos», incluso después de reiniciar.
 - **Volumen, brillo y luz del teclado** con indicadores propios, también en la pantalla de bloqueo.
 - **Herramientas**: calendario (crea eventos pulsando la fecha), recordatorios, temporizador que baja bajo el notch, batería y sistema, portapapeles con texto e imágenes, y una estantería para arrastrar archivos.
-- Funciona en **varias pantallas**, y en Macs sin notch dibuja una píldora arriba al centro.
+- Funciona en **varias pantallas** y en **Macs sin notch**: allí vive arriba del todo, dentro de la barra de menús, y no se ve hasta que hay música, un aviso o algo que enseñar (o, si prefieres, como una isla flotante bajo la barra).
 
 ### Tuyo, hasta el último detalle
 
@@ -70,7 +70,7 @@ Fuente, efecto de resaltado, reloj, fondos, animaciones, tamaño y movimiento de
 
 **¿Es gratis?** Sí, y de código abierto bajo licencia MIT.
 
-**¿Funciona en mi Mac?** Necesita macOS 15 (Sequoia) o superior. El notch completo luce en Macs con notch; en los demás verás una píldora arriba al centro.
+**¿Funciona en mi Mac?** Necesita macOS 15 (Sequoia) o superior. Con notch, se funde con el recorte; sin él (como en los MacBook sin notch o en un monitor externo), se coloca arriba del todo, dentro de la barra de menús, invisible en reposo si quieres (o como una isla flotante bajo la barra). Para abrirla, lleva el puntero al centro del borde de arriba o usa «Abrir el notch» en el menú de MycSs.
 
 **¿Por qué macOS avisa al abrirla?** MycSs aún no está notarizada por Apple. Con Homebrew o `install.sh` no verás el aviso; con el `.dmg`, haz clic derecho > Abrir la primera vez.
 
@@ -86,7 +86,7 @@ Fuente, efecto de resaltado, reloj, fondos, animaciones, tamaño y movimiento de
 
 - macOS 15 (Sequoia) o superior.
 - Spotify, Apple Music o un navegador con algo sonando.
-- Un Mac con notch para el notch completo. En los demás se dibuja una píldora arriba al centro.
+- Cualquier Mac: con notch se funde con el recorte; sin él vive arriba del todo, dentro de la barra de menús, o como isla flotante si lo eliges (Notch › Aspecto › «Pantallas sin notch»).
 
 ## Todas las formas de instalar
 

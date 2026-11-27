@@ -7,6 +7,15 @@ All notable changes to MycSs are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Macs and screens without a notch (a notch-less MacBook, an external monitor): the
+  notch now sits at the very top, inside the menu bar and as tall as it, and stays
+  invisible until there is music, a notification or an indicator to show (or it can be
+  a floating island under the bar, round on every side). Notch,
+  Aspecto, "Pantallas sin notch": the shape (top of the screen or island), what it
+  does at rest (nothing, or an always visible pill) and the width of its zone. It opens
+  from the top centre edge of the screen, or from the new "Abrir el notch" item of the
+  menu. The settings preview can show "Con notch" or "Sin notch" to try it on any Mac.
+  The old fixed 170x28 pill, taller than the menu bar, is gone.
 - Notch surfaces: besides the plain black, the notch can be **glass** (it blurs what is
   behind it, with a sheen and a rim of light) or **tinted glass** (the accent colour
   poured into it), with its own transparency and roundness of the corners (Notch,

@@ -164,6 +164,8 @@ cambio de canción. `CoverProvider` recuerda con qué canción vio cada URL y nu
 de otra; `ThemeEngine` lee la URL ya asentada aunque la portada saliera de la caché, y
 `SyncEngine` lee el título junto al artista para que no se mezclen dos canciones.
 
+**Sin notch.** Una pantalla sin recorte físico (`safeAreaInsets.top == 0`) usa `NotchGeometry.plain`: pegada al borde de arriba con el alto de la barra (por defecto), o isla flotante bajo la barra (`topInset`, esquinas redondas, sin orejas); en reposo invisible o visible (spec 017). El hueco entre las alas pasa de ancho del recorte a 22 pt (`contentGap`), y las filas de texto (aviso, título, temporizador) conservan un mínimo de 150 pt (`textGap`).
+
 **Varias pantallas.** Con otra pantalla conectada el notch sale también en ella, como una píldora arriba en el centro (Preferencias › Notch › Pantallas: solo la de la Mac, o todas; por defecto todas). Cada pantalla enseña lo mismo, pero se abre solo en la que pones el puntero. Se añade y se quita al conectar o desconectar pantallas.
 
 **Movimiento y aspecto.** Preferencias › Notch elige el movimiento (suave, elástica,
