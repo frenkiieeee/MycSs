@@ -178,7 +178,11 @@ final class LockOverlayController {
     /// notification, so the overlay is placed in the newest known lock Space and
     /// then moved again as soon as the real one appears.
     func followLockScreen() {
-        guard !isPreview, !dismissedWhileLocked else { return }
+        // Only while the Mac is locked. The panels are kept hidden between locks, and
+        // this asks the window server for every window on screen (twice per tick); worse,
+        // its "the window is not being drawn" branch presented the hidden panels again,
+        // so their lyrics views rendered all day with nothing to show.
+        guard lockState.isLocked, !isPreview, !dismissedWhileLocked else { return }
 
         var moved = false
         for panel in panels.values {
@@ -361,7 +365,7 @@ final class LockOverlayController {
             backing: .buffered,
             defer: false
         )
-        let host = NSHostingView(rootView: OverlayRootView(model: model, displayID: displayID))
+        let host = NSHostingView(rootView: LockOverlayContent(model: model, displayID: displayID))
         // The hosting view is created with a zero frame. Without an explicit one
         // it stays zero-sized and the panel renders nothing at all, the window is
         // on screen but its content is invisible.

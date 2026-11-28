@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// What the overlay panels hold. The panels are made once and stay between locks, and
+/// the visual clock keeps running while the notch is on; with the whole lyrics screen
+/// inside, every tick drew it again (clock, lyrics, background) into a window nobody
+/// could see, a good part of a core all day. Hidden, the panel holds an empty view that
+/// reads nothing from the model but `isVisible`, so it is never evaluated again until
+/// the overlay comes back.
+struct LockOverlayContent: View {
+    @Bindable var model: LyricsViewModel
+    var displayID: CGDirectDisplayID
+
+    var body: some View {
+        if model.isVisible {
+            OverlayRootView(model: model, displayID: displayID)
+        } else {
+            Color.clear
+        }
+    }
+}
+
 /// The screen shown on the lock screen.
 ///
 /// The layout follows the reference screenshots: the clock at the top, the album

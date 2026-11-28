@@ -63,10 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // as the lock screen is really on screen.
         tickTimer = Timer(timeInterval: 0.08, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                // `tick` also makes the overlay follow the lock screen into its Space,
+                // which the lock creates a moment after the lock notification.
                 self?.overlayController.tick()
-                // The lock screen creates its Space a moment after the lock
-                // notification, so the overlay follows it into place.
-                self?.overlayController.followLockScreen()
                 if let self {
                     self.notchController.update(
                         locked: self.overlayController.isScreenLocked,
