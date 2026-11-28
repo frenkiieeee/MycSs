@@ -422,6 +422,26 @@ Los halos del fondo llevan el color de la portada, no blanco: sobre un fondo neg
 unos halos blancos se leen como un resplandor de la pantalla y no como el color del
 álbum.
 
+## Consumo de CPU y batería
+
+Medido con `top` y `sample` sobre el `.app` (una vista que se redibuja sin que nadie la vea
+es lo más caro, y no sale en ningún selftest). Reglas que salieron de ahí:
+
+- **Los paneles del bloqueo se crean una vez y se quedan ocultos.** Su contenido
+  (`LockOverlayContent`) es un `Color.clear` mientras `model.isVisible` es falso: el reloj
+  visual sigue corriendo por el notch y cada tick invalidaba toda la pantalla de letras en una
+  ventana invisible (50 % de un núcleo). No leas nada más del modelo fuera de `isVisible`.
+- **`followLockScreen` solo corre con la Mac bloqueada.** Pide a WindowServer todas las
+  ventanas (`CGWindowListCopyWindowInfo(.optionAll)`) y su rama «no se dibuja» volvía a
+  presentar los paneles ocultos.
+- **El sondeo del reproductor es adaptativo** (`SyncEngine.setFastPolling`): 5 Hz con las
+  letras en pantalla, 2 Hz con solo el notch y sonando, 0,7 Hz en pausa. Cada lectura es un
+  Apple Event a Spotify o Music, así que también gasta CPU ajena.
+- Las animaciones pequeñas del notch (vinilo, barras) comparten `NotchFrame.interval`
+  (20 fps): cada una despierta la ventana entera del notch.
+- Con el overlay de letras en pantalla el gasto sigue siendo alto (pantalla completa, 60 Hz);
+  es lo siguiente que optimizar.
+
 ## Estructura del código
 
 ```

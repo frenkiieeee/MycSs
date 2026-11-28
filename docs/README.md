@@ -32,6 +32,7 @@ Estos documentos son la memoria del proyecto: lo que una persona o un agente nec
 | 1e | Pulido del notch, historial de avisos, portapapeles con imágenes y tap de Homebrew | [015](specs/015-notch-polish-and-tap.md) |
 | 1f | Superficies del notch: cristal, teñido y temporizador de regla | [016](specs/016-notch-surfaces.md) |
 | 1g | MycSs en Macs y pantallas sin notch | [017](specs/017-screens-without-notch.md) |
+| 1h | El notch abre al principio y «Avisos» solo guarda lo pendiente | [018](specs/018-notch-start-and-checked-notifications.md) |
 | 6 | Notarización con Developer ID | pendiente |
 
 ## Cómo usarlos con agentes

@@ -64,6 +64,13 @@ All notable changes to MycSs are listed here. The format follows
   can be turned off and has six animations (fade, slide, grow, pop, drop, blur).
 
 ### Changed
+- The notch always opens at the start: the home page and its first widget, not the page
+  or widget it was left on (dragging files still opens the shelf).
+- «Avisos» keeps only what is pending. A notification leaves the list when it was
+  dismissed or clicked in the Notification Centre or withdrawn by its app once the message
+  was read, when its app comes to the front, when it has been there for 24 hours, or with
+  the new cross each row shows under the pointer (it takes it out without opening the app).
+  The «Avisos» icon in the widget row carries the number waiting.
 - The timer drops under the closed notch, like a notification, instead of squeezing the
   time into its side: it fits at any size of the notch, and the sides keep the music.
 - The names and icons of the apps in notifications are looked up once, not on every redraw.
@@ -74,6 +81,17 @@ All notable changes to MycSs are listed here. The format follows
   animation (also for songs skipped in a row).
 
 ### Fixed
+- Much lower CPU and battery use with the Mac unlocked: the app used about 50 % of a
+  core doing nothing, and now about 1 % paused and 7 to 9 % while music plays (the notch's
+  own animation). Three causes: the hidden lock screen panels kept drawing the lyrics,
+  clock and background on every tick of the visual clock (they now hold an empty view
+  until the lock screen is up), the lock screen follower asked the window server for every
+  window twice per tick even when unlocked (and presented the hidden panels again), and the
+  player was read five times a second for nobody. The player is now read often (5 times a
+  second) only while the lyrics are on screen; with the notch alone it is twice a second
+  playing and every second and a half paused. The closed notch's record and bars share
+  one 20 fps clock, its model clock runs at 4 Hz, and the list of open browsers is cached
+  for two seconds.
 - The "Minimal" style left the cover stuck to the top while the lyrics were in the
   middle; without the clock the cover is now centred with them.
 - The open notch no longer shifts when the notifications widget is shown: it is one row
