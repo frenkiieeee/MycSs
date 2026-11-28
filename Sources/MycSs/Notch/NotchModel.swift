@@ -192,6 +192,12 @@ final class NotchModel {
     func open(tab: NotchTab? = nil, haptic: Bool = false) {
         if let tab { self.tab = tab }
         guard !isOpen else { return }
+        // It always opens at the start (spec 018): the home page and its first widget,
+        // unless whoever opens it asks for another page. Done here and not when it
+        // closes, so the closing animation does not change page on its way out.
+        if tab == nil { self.tab = .home }
+        let first = AppSettings.shared.notchWidgets.first ?? .calendar
+        if widget != first { widget = first }
         openDisplay = hoverDisplay
         isOpen = true
         isPeeking = false
