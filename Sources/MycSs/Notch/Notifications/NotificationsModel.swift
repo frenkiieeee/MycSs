@@ -44,6 +44,7 @@ final class NotificationsModel {
     @ObservationIgnored private var db: OpaquePointer?
     @ObservationIgnored private var lastID: Int64 = 0
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
     @ObservationIgnored private let watcher = FileWatcher()
     @ObservationIgnored let banners = SystemBannerCloser()
     /// The settings page asks every two seconds with a throwaway model: it should not fill the log.
@@ -69,6 +70,8 @@ final class NotificationsModel {
 
     /// Notifications older than this are history, not news.
     private let freshness: TimeInterval = 90
+    /// A notification left alone this long is taken as seen (spec 018).
+    static let lifetime: TimeInterval = 24 * 3600
     private let historyLimit = 30
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
@@ -103,6 +106,17 @@ final class NotificationsModel {
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+        // An app that comes to the front has been looked at (spec 018). A test database
+        // never listens: the apps of the person running it are not part of the test.
+        if overridePath == nil {
+            activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+            ) { [weak self] note in
+                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                let bundleID = app?.bundleIdentifier ?? ""
+                MainActor.assumeIsolated { self?.appActivated(bundleID) }
+            }
+        }
         watcher.onChange = { [weak self] in self?.poll() }
         poll()
     }
@@ -110,6 +124,8 @@ final class NotificationsModel {
     func stop() {
         timer?.invalidate()
         timer = nil
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        activationObserver = nil
         watcher.stop()
         banners.stop()
         if let db { sqlite3_close(db) }
@@ -129,6 +145,51 @@ final class NotificationsModel {
 
     func remove(_ notification: NotchNotification) {
         history.removeAll { $0.id == notification.id }
+        if hoveredID == notification.id { hoveredID = nil }
+        scheduleSave()
+    }
+
+    /// The row under the pointer, which shows its own cross instead of the time.
+    private(set) var hoveredID: Int64?
+
+    func hover(_ notification: NotchNotification, _ inside: Bool) {
+        if inside { hoveredID = notification.id } else if hoveredID == notification.id { hoveredID = nil }
+    }
+
+    // MARK: - Seen elsewhere (spec 018)
+
+    /// An app came to the front: what it had told the user is taken as seen.
+    func appActivated(_ bundleID: String) {
+        guard !bundleID.isEmpty, bundleID != Bundle.main.bundleIdentifier else { return }
+        let before = history.count
+        history.removeAll { $0.bundleID == bundleID && $0.symbolName == nil }
+        if current?.bundleID == bundleID { dismiss() }
+        if history.count != before { scheduleSave() }
+    }
+
+    /// Takes out what is too old, and what is no longer in the Notification Centre: it
+    /// was dismissed there, its banner was clicked, or the app withdrew it once the
+    /// message was read. A failed read of the database removes nothing.
+    func prune(database db: OpaquePointer?) {
+        var kept = history
+        let limit = Date().addingTimeInterval(-Self.lifetime)
+        kept.removeAll { $0.date < limit }
+
+        if let db {
+            // Where MycSs closes the system's banner itself, the record can vanish with
+            // it, so its absence says nothing about whether it was seen.
+            let settings = AppSettings.shared
+            let checkable = kept.filter { $0.symbolName == nil && !settings.notificationRule(for: $0.bundleID).hidesBanner }
+            if let alive = NotificationDatabase.existing(checkable.map(\.id), in: db) {
+                let gone = Set(checkable.map(\.id)).subtracting(alive)
+                if !gone.isEmpty {
+                    kept.removeAll { gone.contains($0.id) }
+                    if logsChanges { Log.line("notifications: \(gone.count) seen elsewhere, taken out of the list") }
+                }
+            }
+        }
+        guard kept.count != history.count else { return }
+        history = kept
         scheduleSave()
     }
 
@@ -184,6 +245,9 @@ final class NotificationsModel {
             openDatabase()
         }
         guard let db else { return }
+
+        // What was seen somewhere else leaves the list (spec 018).
+        prune(database: db)
 
         if lastID == 0 {
             // Start from now: what is already in there is history.

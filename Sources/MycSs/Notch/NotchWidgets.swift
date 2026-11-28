@@ -63,6 +63,19 @@ private struct WidgetHeader: View {
                                 .background {
                                     if active { Circle().fill(.white.opacity(0.16)) }
                                 }
+                                .overlay(alignment: .topTrailing) {
+                                    // What is waiting in «Avisos», without having to open it.
+                                    let waiting = widget == .notifications && !active ? services.notifications.history.count : 0
+                                    if waiting > 0 {
+                                        Text(waiting > 9 ? "9+" : "\(waiting)")
+                                            .font(.system(size: 7, weight: .bold))
+                                            .foregroundStyle(.black.opacity(0.85))
+                                            .padding(.horizontal, 3)
+                                            .frame(minWidth: 10, minHeight: 10)
+                                            .background(Capsule().fill(Color(red: 1, green: 0.72, blue: 0.35)))
+                                            .offset(x: 3, y: -2)
+                                    }
+                                }
                         }
                         .buttonStyle(NotchPress(scale: 0.88))
                         .probe("widget.\(widget.rawValue)")
@@ -781,33 +794,57 @@ private struct NotificationsWidget: View {
                 // open notch out of place.
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(notifications.history.prefix(3).enumerated()), id: \.element.id) { index, item in
-                        Button {
-                            notifications.open(item)
-                            NotchHaptics.tick()
-                        } label: {
-                            HStack(spacing: 7) {
-                                NotificationIcon(notification: item, size: 15)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(item.shownHeadline)
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(index == 0 ? 0.95 : 0.75))
-                                    Text(item.appName)
-                                        .font(.system(size: 9, weight: .medium))
+                        let hovered = notifications.hoveredID == item.id
+                        ZStack(alignment: .trailing) {
+                            Button {
+                                notifications.open(item)
+                                NotchHaptics.tick()
+                            } label: {
+                                HStack(spacing: 7) {
+                                    NotificationIcon(notification: item, size: 15)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(item.shownHeadline)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.white.opacity(index == 0 ? 0.95 : 0.75))
+                                        Text(item.appName)
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.4))
+                                    }
+                                    .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Text(item.date, format: .dateTime.hour().minute())
+                                        .font(.system(size: 9.5, weight: .medium).monospacedDigit())
                                         .foregroundStyle(.white.opacity(0.4))
+                                        .opacity(hovered ? 0 : 1)
                                 }
-                                .lineLimit(1)
-                                Spacer(minLength: 0)
-                                Text(item.date, format: .dateTime.hour().minute())
-                                    .font(.system(size: 9.5, weight: .medium).monospacedDigit())
-                                    .foregroundStyle(.white.opacity(0.4))
+                                .frame(height: 27)
+                                .padding(.horizontal, 8)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.white.opacity(index == 0 ? 0.09 : 0.04)))
                             }
-                            .frame(height: 27)
-                            .padding(.horizontal, 8)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.white.opacity(index == 0 ? 0.09 : 0.04)))
+                            .buttonStyle(NotchPress(scale: 0.97))
+                            .probe("notification.\(index)")
+
+                            // Under the pointer the time gives way to a cross that takes the
+                            // notification out without opening its app (spec 018).
+                            if hovered {
+                                Button {
+                                    notifications.remove(item)
+                                    NotchHaptics.tick()
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                        .frame(width: 17, height: 17)
+                                        .background(Circle().fill(.white.opacity(0.16)))
+                                }
+                                .buttonStyle(NotchPress(scale: 0.88))
+                                .padding(.trailing, 6)
+                                .probe("notification.\(index).dismiss")
+                                .transition(.opacity)
+                            }
                         }
-                        .buttonStyle(NotchPress(scale: 0.97))
-                        .probe("notification.\(index)")
+                        .onHover { notifications.hover(item, $0) }
                     }
                 }
                 .animation(NotchMotion.swap, value: notifications.history.map(\.id))

@@ -25,6 +25,25 @@ enum NotificationDatabase {
         return max(sqlite3_column_int64(statement, 0), 1)
     }
 
+    /// Which of these records are still in the database, or `nil` when the question
+    /// could not be asked (a failed read must never be taken for "all gone").
+    static func existing(_ ids: [Int64], in db: OpaquePointer) -> Set<Int64>? {
+        guard !ids.isEmpty else { return [] }
+        // Numbers only, so there is nothing to escape.
+        let list = ids.map(String.init).joined(separator: ",")
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "SELECT rec_id FROM record WHERE rec_id IN (\(list))", -1, &statement, nil) == SQLITE_OK
+        else { return nil }
+        var found = Set<Int64>()
+        while true {
+            let step = sqlite3_step(statement)
+            if step == SQLITE_ROW { found.insert(sqlite3_column_int64(statement, 0)) }
+            else if step == SQLITE_DONE { return found }
+            else { return nil }
+        }
+    }
+
     /// The records after `id`, oldest first.
     static func records(in db: OpaquePointer, after id: Int64) -> [NotchNotification] {
         let sql = """
