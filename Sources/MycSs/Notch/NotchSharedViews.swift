@@ -3,6 +3,13 @@ import UniformTypeIdentifiers
 
 // MARK: - Shared pieces
 
+/// How often the closed notch's small animations (the turning record and the bars) are
+/// drawn. They share it on purpose: each one wakes the whole notch window, so two
+/// different rates meant up to fifty redraws a second for a few pixels of movement.
+enum NotchFrame {
+    static let interval: TimeInterval = 1.0 / 20.0
+}
+
 /// A record that turns while the music plays, kept across redraws so a pause does
 /// not send it back to the start.
 @MainActor
@@ -29,7 +36,7 @@ struct CoverThumb: View {
 
     var body: some View {
         if AppSettings.shared.notchCoverShape == .vinyl {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !model.isPlayingNow)) { timeline in
+            TimelineView(.animation(minimumInterval: NotchFrame.interval, paused: !model.isPlayingNow)) { timeline in
                 let angle = VinylSpin.shared.angle(at: timeline.date, playing: model.isPlayingNow)
                 picture
                     .clipShape(Circle())
@@ -125,7 +132,7 @@ struct Visualiser: View {
     }
 
     private var simulatedBars: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: !active)) { timeline in
+        TimelineView(.animation(minimumInterval: NotchFrame.interval, paused: !active)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             HStack(alignment: .center, spacing: Self.gap) {
                 ForEach(0..<5, id: \.self) { index in
@@ -142,7 +149,7 @@ struct Visualiser: View {
 
     /// A line that undulates, taller with louder music.
     private func wave(levels: [Float]?) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { timeline in
+        TimelineView(.animation(minimumInterval: NotchFrame.interval, paused: !active)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let energy = levels.map { CGFloat($0.reduce(0, +) / Float(max($0.count, 1))) } ?? 0.55
             Canvas { context, size in
@@ -162,7 +169,7 @@ struct Visualiser: View {
 
     /// Three dots that bounce one after the other.
     private func dots(levels: [Float]?) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { timeline in
+        TimelineView(.animation(minimumInterval: NotchFrame.interval, paused: !active)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let energy = levels.map { CGFloat($0.reduce(0, +) / Float(max($0.count, 1))) } ?? 0.6
             HStack(spacing: 4) {

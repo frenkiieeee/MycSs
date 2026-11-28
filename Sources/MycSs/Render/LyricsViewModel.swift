@@ -184,7 +184,11 @@ final class LyricsViewModel {
     func startListening() {
         // The demo timeline does not read from Spotify.
         guard !isDemo else { return }
-        Task { await engine.start() }
+        let fast = isVisible
+        Task {
+            await engine.setFastPolling(fast)
+            await engine.start()
+        }
     }
 
     /// Starts the visual clock and the artwork refresh.
@@ -321,7 +325,7 @@ final class LyricsViewModel {
 
     /// The visual clock. Sixty times a second while the overlay is on screen;
     /// slower for the notch, which only has to show a progress bar: thirty times
-    /// a second when it is open, ten when it is closed.
+    /// a second when it is open, four when it is closed (it shows no position then).
     private func ensureTicker() {
         guard ticker == nil else { return }
         ticker = Task { [weak self] in
@@ -332,7 +336,7 @@ final class LyricsViewModel {
                     // A preview is a small picture: twenty-five frames are plenty.
                     if self.isSettingsPreview { return 40_000_000 }
                     if self.isVisible { return 16_666_667 }
-                    return self.notchExpanded ? 33_000_000 : 100_000_000
+                    return self.notchExpanded ? 33_000_000 : 250_000_000
                 }
                 try? await Task.sleep(nanoseconds: interval)
             }
@@ -496,6 +500,8 @@ final class LyricsViewModel {
     func setVisible(_ visible: Bool) {
         guard isVisible != visible else { return }
         isVisible = visible
+        // The player is read often only while the lyrics are on screen.
+        if !isDemo { Task { await engine.setFastPolling(visible) } }
         appearedAt = Date()
         clockShownAt = Date()
         if clockHidden { clockHidden = false }

@@ -27,8 +27,32 @@ actor SyncEngine {
         self.source = source
     }
 
-    /// How often the position is sampled from the player.
+    /// How often the position is sampled from the player while the lyrics are on screen.
     private let pollInterval: TimeInterval = 0.2
+
+    /// Whether something on screen needs the position several times a second: the lyrics
+    /// of the lock screen, the screensaver. Without it (the notch is all that shows) the
+    /// player is asked far less, which saves the app's work and the player's: every read
+    /// is an Apple Event to Spotify or Music. The position is interpolated between reads
+    /// either way, and a seek or a new song is still noticed within a second.
+    private var wantsFastPolling = true
+    private var lastPoll = Date.distantPast
+
+    func setFastPolling(_ fast: Bool) {
+        let wasFast = wantsFastPolling
+        wantsFastPolling = fast
+        // The lyrics are coming up: read now, not at the next wake-up.
+        if fast, !wasFast, pollTask != nil {
+            lastPoll = Date()
+            Task { await poll() }
+        }
+    }
+
+    /// The time between two reads right now.
+    private var currentPollInterval: TimeInterval {
+        if wantsFastPolling { return pollInterval }
+        return isPaused ? 1.5 : 0.5
+    }
 
     /// Position differences larger than this are treated as a seek rather than
     /// as normal drift.
@@ -114,11 +138,25 @@ actor SyncEngine {
 
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                let interval = self?.pollInterval ?? 0.2
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-                await self?.poll()
+                guard let step = await self?.wakeStep else { return }
+                try? await Task.sleep(nanoseconds: UInt64(step * 1_000_000_000))
+                // In the slow mode some wake-ups do not read anything.
+                guard let self, await self.isDueForPoll() else { continue }
+                await self.poll()
             }
         }
+    }
+
+    /// How long the loop sleeps between wake-ups: the poll interval itself while the
+    /// lyrics are on screen, and half a second otherwise, so the loop is not woken
+    /// five times a second to do nothing.
+    private var wakeStep: TimeInterval { wantsFastPolling ? pollInterval : 0.5 }
+
+    private func isDueForPoll() -> Bool {
+        let now = Date()
+        guard now.timeIntervalSince(lastPoll) >= currentPollInterval - 0.05 else { return false }
+        lastPoll = now
+        return true
     }
 
     // MARK: - Commands

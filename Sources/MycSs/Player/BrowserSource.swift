@@ -422,9 +422,21 @@ final class BrowserSource: PlayerSource {
     }
 
     static func openBrowsers() -> [Browser] {
+        // Asking the system for every running app is not free, and each poll asks more
+        // than once. A browser that opens or closes is noticed within two seconds.
+        openBrowsersLock.lock()
+        defer { openBrowsersLock.unlock() }
+        if let cached = openBrowsersCache, Date().timeIntervalSince(cached.date) < 2 {
+            return cached.browsers
+        }
         let running = Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
-        return supported.filter { running.contains($0.bundleID) }
+        let browsers = supported.filter { running.contains($0.bundleID) }
+        openBrowsersCache = (Date(), browsers)
+        return browsers
     }
+
+    private static let openBrowsersLock = NSLock()
+    nonisolated(unsafe) private static var openBrowsersCache: (date: Date, browsers: [Browser])?
 
     private static func snapshot(_ media: BrowserMedia?, latency: TimeInterval) -> PlayerSnapshot {
         PlayerSnapshot(
