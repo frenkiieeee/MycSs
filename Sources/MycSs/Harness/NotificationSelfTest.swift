@@ -95,6 +95,16 @@ enum NotificationSelfTest {
         check("the history keeps what reached the notch, newest first",
               model.history.map(\.id) == [7, 6])
 
+        // Seen somewhere else (spec 018): dismissed in the Notification Centre, or its app
+        // brought to the front. Neither touches the database from here.
+        sqlite3_exec(db, "DELETE FROM record WHERE rec_id = 6", nil, nil, nil)
+        for _ in 0..<60 where model.history.count > 1 { try? await Task.sleep(nanoseconds: 25_000_000) }
+        check("one dismissed in the Notification Centre leaves the list", model.history.map(\.id) == [7])
+        check("the others stay", model.history.count == 1)
+        model.appActivated("com.apple.mail")
+        check("coming to the app of a notification takes it out", model.history.isEmpty)
+        check("and the one on the notch goes too", model.current == nil)
+
         // Dismissed.
         model.dismiss()
         check("dismissing clears it", model.current == nil)

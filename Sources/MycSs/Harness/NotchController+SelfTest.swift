@@ -309,6 +309,32 @@ extension NotchController {
                 services.clipboard.hover(picture, false)
                 services.clipboard.clear()
             }
+            // Opening the notch starts over at the first widget (spec 018), and the
+            // notifications widget takes one out with its cross, without opening the app.
+            AppSettings.shared.setNotchWidget(.notifications, on: true)
+            notch.close()
+            await pause(0.6)
+            notch.open()
+            await pause(0.7)
+            check("the notch opens on its first widget again", notch.widget == AppSettings.shared.notchWidgets.first)
+            await click("widget.notifications", in: panel)
+            await pause(0.8)
+            let waiting = services.notifications.history.count
+            check("the notifications widget lists what is waiting", waiting > 1 && NotchProbe.frames["notification.0"] != nil)
+            if let frame = NotchProbe.frames["notification.0"], let view = panel.contentView {
+                // The pointer on the row: its cross appears in place of the time.
+                let point = NSPoint(x: frame.midX, y: view.bounds.height - frame.midY)
+                if let move = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) {
+                    panel.sendEvent(move)
+                }
+                services.notifications.hover(services.notifications.history[0], true)
+                await pause(0.5)
+                check("the row under the pointer shows its cross", NotchProbe.frames["notification.0.dismiss"] != nil)
+                capture(panel, to: "\(prefix)-3g-notifications.png")
+                await click("notification.0.dismiss", in: panel)
+                await pause(0.4)
+                check("the cross takes it out of the list", services.notifications.history.count == waiting - 1)
+            }
             AppSettings.shared.notchWidgets = widgetsBefore
             notch.widget = .calendar
             await pause(0.3)

@@ -20,6 +20,7 @@ extension SelfTest {
         testBrowserScripts()
         testFirefoxFamily()
         testNotificationHistory()
+        testNotchStartsAtTheBeginning()
         testClipboardImages()
         testTimerLayout()
         testSurfaces()
@@ -63,6 +64,28 @@ extension SelfTest {
         model.stop()
         NotificationHistoryStore.erase()
         report(NotificationHistoryStore.load().isEmpty, "turning the memory off erases the file")
+    }
+
+    @MainActor
+    private static func testNotchStartsAtTheBeginning() {
+        print("\n-- The notch opens at the start (spec 018) --")
+        let settings = AppSettings.shared
+        let widgets = settings.notchWidgets
+        let remembered = settings.notchWidgetSelected
+        defer { settings.notchWidgetSelected = remembered }
+
+        let notch = NotchModel()
+        notch.tab = .shelf
+        notch.widget = widgets.last ?? .calendar
+        notch.open()
+        report(notch.tab == .home, "it opens on the home page, not on the shelf it was left on")
+        report(notch.widget == (widgets.first ?? .calendar), "and on the first widget")
+        notch.close()
+        notch.open(tab: .shelf)
+        report(notch.tab == .shelf, "unless whoever opens it asks for another page")
+        notch.close()
+        notch.open()
+        report(notch.tab == .home, "the next time it starts over again")
     }
 
     @MainActor
@@ -188,7 +211,7 @@ extension SelfTest {
         let idle = NotchLayout(notch: notch, geometry: geometry, hasTrack: false, timerActive: false)
         let running = NotchLayout(notch: notch, geometry: geometry, hasTrack: false, timerActive: true)
         report(running.kind == .timer && running.body.height > idle.body.height, "a running timer drops a row under the notch")
-        report(running.body.width >= geometry.notch.width + 80, "and the row is wide enough for the time")
+        report(running.body.width >= geometry.notch.width + 120 * NotchGeometry.closedScale, "and the row is wide enough for the time")
     }
 
     // MARK: - Spec 013
